@@ -21,10 +21,18 @@
 #include <gtk/gtk.h>
 #include <stdlib.h>
 
+#define PAWN   1
+#define KNIGHT 2
+#define BISHOP 3
+#define ROOK   4
+#define QUEEN  5
+#define KING   6
+
 static GtkFixed *board;
 static int click_x = -1, click_y;
 static float offset_x, offset_y;
-static GtkWidget *pieces[8][8];
+static GtkWidget *images[8][8];
+static int pieces[8][8];
 
 static void apply_css(GtkWidget *widget, GtkStyleProvider *provider) {
     gtk_style_context_add_provider(gtk_widget_get_style_context(widget), provider, G_MAXUINT);
@@ -43,16 +51,17 @@ static void generate_board(GtkGrid *grid) {
     }
 }
 
-static void add_piece(char *path, int x, int y) {
-    pieces[x][y] = gtk_image_new_from_file(path);
-    gtk_fixed_put(board, pieces[x][y], x*64, y*64);
+static void add_piece(char *path, int type, int x, int y) {
+    images[x][y] = gtk_image_new_from_file(path);
+    pieces[x][y] = type;
+    gtk_fixed_put(board, images[x][y], x*64, y*64);
 }
 
 static gboolean mouse_pressed(GtkWidget *widget, GdkEventButton *event, gpointer data) {
     click_x = event->x / 64;
     click_y = event->y / 64;
 
-    if (click_x < 8 && click_y < 8 && pieces[click_x][click_y]) {
+    if (click_x < 8 && click_y < 8 && images[click_x][click_y]) {
         offset_x = event->x - click_x * 64;
         offset_y = event->y - click_y * 64;
     } else click_x = -1;
@@ -62,7 +71,7 @@ static gboolean mouse_pressed(GtkWidget *widget, GdkEventButton *event, gpointer
 
 static gboolean mouse_moved(GtkWidget *widget, GdkEventMotion *event, gpointer data) {
     if (click_x != -1) {
-        gtk_fixed_move(board, pieces[click_x][click_y],
+        gtk_fixed_move(board, images[click_x][click_y],
                 event->x - offset_x, event->y - offset_y);
     }
     return TRUE;
@@ -71,9 +80,12 @@ static gboolean mouse_moved(GtkWidget *widget, GdkEventMotion *event, gpointer d
 static gboolean mouse_released(GtkWidget *widget, GdkEventButton *event, gpointer data) {
     int target_x = event->x / 64,
         target_y = event->y / 64;
-    gtk_fixed_move(board, pieces[click_x][click_y], target_x * 64, target_y * 64);
+    gtk_fixed_move(board, images[click_x][click_y], target_x * 64, target_y * 64);
+
+    images[target_x][target_y] = images[click_x][click_y];
+    images[click_x][click_y] = NULL;
     pieces[target_x][target_y] = pieces[click_x][click_y];
-    pieces[click_x][click_y] = NULL;
+    pieces[click_x][click_y] = 0;
 
     click_x = -1;
 
@@ -84,30 +96,30 @@ static void generate_pieces(GtkOverlay *overlay) {
     board = GTK_FIXED(gtk_fixed_new());
 
     for (int i = 0; i < 8; ++i) {
-        add_piece("img/bp.png", i, 1);
-        add_piece("img/wp.png", i, 6);
+        add_piece("img/bp.png", -PAWN, i, 1);
+        add_piece("img/wp.png", +PAWN, i, 6);
     }
 
-    add_piece("img/br.png", 0, 0);
-    add_piece("img/br.png", 7, 0);
-    add_piece("img/wr.png", 0, 7);
-    add_piece("img/wr.png", 7, 7);
+    add_piece("img/br.png", -ROOK, 0, 0);
+    add_piece("img/br.png", -ROOK, 7, 0);
+    add_piece("img/wr.png", +ROOK, 0, 7);
+    add_piece("img/wr.png", +ROOK, 7, 7);
 
-    add_piece("img/bn.png", 1, 0);
-    add_piece("img/bn.png", 6, 0);
-    add_piece("img/wn.png", 1, 7);
-    add_piece("img/wn.png", 6, 7);
+    add_piece("img/bn.png", -KNIGHT, 1, 0);
+    add_piece("img/bn.png", -KNIGHT, 6, 0);
+    add_piece("img/wn.png", +KNIGHT, 1, 7);
+    add_piece("img/wn.png", +KNIGHT, 6, 7);
 
-    add_piece("img/bb.png", 2, 0);
-    add_piece("img/bb.png", 5, 0);
-    add_piece("img/wb.png", 2, 7);
-    add_piece("img/wb.png", 5, 7);
+    add_piece("img/bb.png", -BISHOP, 2, 0);
+    add_piece("img/bb.png", -BISHOP, 5, 0);
+    add_piece("img/wb.png", +BISHOP, 2, 7);
+    add_piece("img/wb.png", +BISHOP, 5, 7);
 
-    add_piece("img/bq.png", 3, 0);
-    add_piece("img/wq.png", 3, 7);
+    add_piece("img/bq.png", -QUEEN, 3, 0);
+    add_piece("img/wq.png", +QUEEN, 3, 7);
 
-    add_piece("img/bk.png", 4, 0);
-    add_piece("img/wk.png", 4, 7);
+    add_piece("img/bk.png", -KING, 4, 0);
+    add_piece("img/wk.png", +KING, 4, 7);
 
     gtk_overlay_add_overlay(overlay, GTK_WIDGET(board));
 }
