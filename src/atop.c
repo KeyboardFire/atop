@@ -21,15 +21,10 @@
 #include <gtk/gtk.h>
 #include <stdlib.h>
 
-struct piece {
-    GtkWidget *eb;
-    int x;
-    int y;
-};
-
-GtkFixed *board;
-float click_x, click_y;
-struct piece *clicked = NULL;
+static GtkFixed *board;
+static int click_x = -1, click_y;
+static float offset_x, offset_y;
+static GtkWidget *pieces[8][8];
 
 static void apply_css(GtkWidget *widget, GtkStyleProvider *provider) {
     gtk_style_context_add_provider(gtk_widget_get_style_context(widget), provider, G_MAXUINT);
@@ -48,41 +43,40 @@ static void generate_board(GtkGrid *grid) {
     }
 }
 
-static gboolean piece_clicked(GtkWidget *eb, GdkEventButton *event, gpointer data) {
-    click_x = event->x;
-    click_y = event->y;
-    clicked = data;
+static void add_piece(char *path, int x, int y) {
+    pieces[x][y] = gtk_image_new_from_file(path);
+    gtk_fixed_put(board, pieces[x][y], x*64, y*64);
+}
+
+static gboolean mouse_pressed(GtkWidget *widget, GdkEventButton *event, gpointer data) {
+    click_x = event->x / 64;
+    click_y = event->y / 64;
+
+    if (click_x < 8 && click_y < 8 && pieces[click_x][click_y]) {
+        offset_x = event->x - click_x * 64;
+        offset_y = event->y - click_y * 64;
+    } else click_x = -1;
+
     return TRUE;
 }
 
-static void add_piece(char *path, int x, int y) {
-    GtkWidget *img = gtk_image_new_from_file(path);
-    GtkWidget *eb = gtk_event_box_new();
-    gtk_container_add(GTK_CONTAINER(eb), img);
-
-    struct piece *piece = malloc(sizeof *piece);
-    piece->eb = eb;
-    piece->x = x;
-    piece->y = y;
-    g_signal_connect(G_OBJECT(eb), "button_press_event",
-            G_CALLBACK(piece_clicked), piece);
-
-    gtk_fixed_put(board, eb, x*64, y*64);
-}
-
 static gboolean mouse_moved(GtkWidget *widget, GdkEventMotion *event, gpointer data) {
-    g_print("%f %f\n", event->x, event->y);
-    if (clicked) {
-        gtk_fixed_move(board, clicked->eb,
-                clicked->x*64 + event->x - click_x,
-                clicked->y*64 + event->y - click_y);
+    if (click_x != -1) {
+        gtk_fixed_move(board, pieces[click_x][click_y],
+                event->x - offset_x, event->y - offset_y);
     }
     return TRUE;
 }
 
 static gboolean mouse_released(GtkWidget *widget, GdkEventButton *event, gpointer data) {
-    g_print("released\n");
-    clicked = NULL;
+    int target_x = event->x / 64,
+        target_y = event->y / 64;
+    gtk_fixed_move(board, pieces[click_x][click_y], target_x * 64, target_y * 64);
+    pieces[target_x][target_y] = pieces[click_x][click_y];
+    pieces[click_x][click_y] = NULL;
+
+    click_x = -1;
+
     return TRUE;
 }
 
@@ -129,9 +123,12 @@ void atop_init(int *argc, char ***argv) {
     gtk_css_provider_load_from_path(provider, "src/builder.css", NULL);
     apply_css(GTK_WIDGET(win), GTK_STYLE_PROVIDER(provider));
 
-    gtk_widget_add_events(win, GDK_POINTER_MOTION_MASK | GDK_BUTTON_RELEASE_MASK);
+    gtk_widget_add_events(GTK_WIDGET(win),
+            GDK_POINTER_MOTION_MASK |
+            GDK_BUTTON_RELEASE_MASK);
 
     g_signal_connect(win, "destroy", G_CALLBACK(gtk_main_quit), NULL);
+    g_signal_connect(win, "button_press_event", G_CALLBACK(mouse_pressed), NULL);
     g_signal_connect(win, "motion_notify_event", G_CALLBACK(mouse_moved), NULL);
     g_signal_connect(win, "button_release_event", G_CALLBACK(mouse_released), NULL);
 
