@@ -32,6 +32,7 @@
 #define NP     KING
 
 static GtkDrawingArea *board;
+static GtkGrid *moves;
 
 static int click_x, click_y, hover_x, hover_y;
 static float offset_x, offset_y;
@@ -48,6 +49,16 @@ static void apply_css(GtkWidget *widget, GtkStyleProvider *provider) {
     gtk_style_context_add_provider(gtk_widget_get_style_context(widget), provider, G_MAXUINT);
     if (GTK_IS_CONTAINER(widget)) {
         gtk_container_forall(GTK_CONTAINER(widget), (GtkCallback)apply_css, provider);
+    }
+}
+
+static void update_moves() {
+    gtk_container_foreach(GTK_CONTAINER(moves), (GtkCallback)gtk_widget_destroy, NULL);
+
+    for (int i = 0; i < 100; ++i) {
+        GtkLabel *txt = gtk_label_new("meems");
+        gtk_grid_attach_next_to(moves, GTK_WIDGET(txt), NULL, GTK_POS_BOTTOM, 1, 1);
+        gtk_widget_show(GTK_WIDGET(txt));
     }
 }
 
@@ -177,6 +188,8 @@ static gboolean mouse_released(GtkWidget *widget, GdkEventButton *event, gpointe
         if (legal[hover_x][hover_y]) {
             pieces[hover_x][hover_y] = clicked;
             pieces[click_x][click_y] = 0;
+
+            update_moves();
         }
 
         clicked = 0;
@@ -275,6 +288,10 @@ void atop_init(int *argc, char ***argv) {
     board = GTK_DRAWING_AREA(gtk_builder_get_object(builder, "board"));
     gtk_widget_set_size_request(GTK_WIDGET(board), 512, 512);
     g_signal_connect(board, "draw", G_CALLBACK(draw_board), NULL);
+
+    moves = GTK_GRID(gtk_builder_get_object(builder, "moves"));
+    gtk_widget_set_size_request(GTK_WIDGET(gtk_builder_get_object(builder, "scroll")), 256, 512);
+    update_moves();
 
     initialize_images();
     initialize_pieces();

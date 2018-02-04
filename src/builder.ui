@@ -3,6 +3,23 @@
         <property name='visible'>True</property>
         <property name='title'>atop</property>
 
-        <child><object id='board' class='GtkDrawingArea'></object></child>
+        <child><object class='GtkGrid'>
+            <child>
+                <object id='board' class='GtkDrawingArea'></object>
+                <packing>
+                    <property name='left-attach'>0</property>
+                    <property name='top-attach'>0</property>
+                </packing>
+            </child>
+            <child>
+                <object id='scroll' class='GtkScrolledWindow'>
+                    <child><object id='moves' class='GtkGrid'></object></child>
+                </object>
+                <packing>
+                    <property name='left-attach'>1</property>
+                    <property name='top-attach'>0</property>
+                </packing>
+            </child>
+        </object></child>
     </object>
 </interface>
