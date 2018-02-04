@@ -27,12 +27,19 @@
 #define ROOK   4
 #define QUEEN  5
 #define KING   6
+#define NP     KING
 
-static GtkFixed *board;
-static int click_x = -1, click_y;
+static GtkDrawingArea *board;
+
+static int click_x, click_y, hover_x, hover_y;
 static float offset_x, offset_y;
-static GtkWidget *images[8][8];
+
 static int pieces[8][8];
+static int clicked;
+
+static cairo_surface_t *img_piece[NP*2+1];
+static cairo_surface_t *img_dark;
+static cairo_surface_t *img_light;
 
 static void apply_css(GtkWidget *widget, GtkStyleProvider *provider) {
     gtk_style_context_add_provider(gtk_widget_get_style_context(widget), provider, G_MAXUINT);
@@ -41,85 +48,126 @@ static void apply_css(GtkWidget *widget, GtkStyleProvider *provider) {
     }
 }
 
-static void generate_board(GtkGrid *grid) {
-    for (int i = 0; i < 8; ++i) {
-        for (int j = 0; j < 8; ++j) {
-            GtkWidget *img = gtk_image_new_from_file(
-                    (i + j) % 2 ? "img/black.png" : "img/white.png");
-            gtk_grid_attach(grid, img, i, j, 1, 1);
-        }
-    }
+static void add_piece(int type, int x, int y) {
+    pieces[x][y] = type;
 }
 
-static void add_piece(char *path, int type, int x, int y) {
-    images[x][y] = gtk_image_new_from_file(path);
-    pieces[x][y] = type;
-    gtk_fixed_put(board, images[x][y], x*64, y*64);
+static void initialize_images() {
+    img_piece[NP-PAWN]   = cairo_image_surface_create_from_png("img/bp.png");
+    img_piece[NP-KNIGHT] = cairo_image_surface_create_from_png("img/bn.png");
+    img_piece[NP-BISHOP] = cairo_image_surface_create_from_png("img/bb.png");
+    img_piece[NP-ROOK]   = cairo_image_surface_create_from_png("img/br.png");
+    img_piece[NP-QUEEN]  = cairo_image_surface_create_from_png("img/bq.png");
+    img_piece[NP-KING]   = cairo_image_surface_create_from_png("img/bk.png");
+    img_piece[NP+PAWN]   = cairo_image_surface_create_from_png("img/wp.png");
+    img_piece[NP+KNIGHT] = cairo_image_surface_create_from_png("img/wn.png");
+    img_piece[NP+BISHOP] = cairo_image_surface_create_from_png("img/wb.png");
+    img_piece[NP+ROOK]   = cairo_image_surface_create_from_png("img/wr.png");
+    img_piece[NP+QUEEN]  = cairo_image_surface_create_from_png("img/wq.png");
+    img_piece[NP+KING]   = cairo_image_surface_create_from_png("img/wk.png");
+    img_dark  = cairo_image_surface_create_from_png("img/black.png");
+    img_light = cairo_image_surface_create_from_png("img/white.png");
 }
 
 static gboolean mouse_pressed(GtkWidget *widget, GdkEventButton *event, gpointer data) {
     click_x = event->x / 64;
     click_y = event->y / 64;
+    if (click_x < 8 || click_y < 8) clicked = pieces[click_x][click_y];
 
-    if (click_x < 8 && click_y < 8 && images[click_x][click_y]) {
-        offset_x = event->x - click_x * 64;
-        offset_y = event->y - click_y * 64;
-    } else click_x = -1;
+    gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
 
     return TRUE;
 }
 
 static gboolean mouse_moved(GtkWidget *widget, GdkEventMotion *event, gpointer data) {
-    if (click_x != -1) {
-        gtk_fixed_move(board, images[click_x][click_y],
-                event->x - offset_x, event->y - offset_y);
+    hover_x = event->x / 64;
+    hover_y = event->y / 64;
+    if (hover_x >= 8 || hover_y >= 8) {
+        hover_x = -1;
     }
+
+    offset_x = event->x;
+    offset_y = event->y;
+
+    gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
+
     return TRUE;
 }
 
 static gboolean mouse_released(GtkWidget *widget, GdkEventButton *event, gpointer data) {
-    int target_x = event->x / 64,
-        target_y = event->y / 64;
-    gtk_fixed_move(board, images[click_x][click_y], target_x * 64, target_y * 64);
+    if (clicked) {
+        pieces[hover_x][hover_y] = clicked;
+        pieces[click_x][click_y] = 0;
 
-    images[target_x][target_y] = images[click_x][click_y];
-    images[click_x][click_y] = NULL;
-    pieces[target_x][target_y] = pieces[click_x][click_y];
-    pieces[click_x][click_y] = 0;
+        clicked = 0;
+    }
 
-    click_x = -1;
+    gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
 
     return TRUE;
 }
 
-static void generate_pieces(GtkOverlay *overlay) {
-    board = GTK_FIXED(gtk_fixed_new());
-
+static gboolean draw_board(GtkWidget *widget, cairo_t *cr, gpointer data) {
     for (int i = 0; i < 8; ++i) {
-        add_piece("img/bp.png", -PAWN, i, 1);
-        add_piece("img/wp.png", +PAWN, i, 6);
+        for (int j = 0; j < 8; ++j) {
+            // draw square
+            cairo_set_source_surface(cr, (i + j) % 2 ? img_dark : img_light, i*64, j*64);
+            cairo_paint(cr);
+
+            // shade square if hovering
+            if (hover_x == i && hover_y == j) {
+                cairo_set_source_rgba(cr, 1, 1, 1, 0.2);
+                cairo_rectangle(cr, i*64, j*64, 64, 64);
+                cairo_fill(cr);
+            }
+
+            // draw piece, if any
+            if (pieces[i][j] && !(clicked && click_x == i && click_y == j)) {
+                cairo_set_source_surface(cr, img_piece[NP+pieces[i][j]], i*64, j*64);
+                cairo_paint(cr);
+            }
+        }
     }
 
-    add_piece("img/br.png", -ROOK, 0, 0);
-    add_piece("img/br.png", -ROOK, 7, 0);
-    add_piece("img/wr.png", +ROOK, 0, 7);
-    add_piece("img/wr.png", +ROOK, 7, 7);
+    // draw piece being held, if any
+    if (clicked) {
+        cairo_set_source_surface(cr, img_piece[NP+clicked], offset_x - 32, offset_y - 32);
+        cairo_paint(cr);
+    }
 
-    add_piece("img/bn.png", -KNIGHT, 1, 0);
-    add_piece("img/bn.png", -KNIGHT, 6, 0);
-    add_piece("img/wn.png", +KNIGHT, 1, 7);
-    add_piece("img/wn.png", +KNIGHT, 6, 7);
+    return FALSE;
+}
 
-    add_piece("img/bb.png", -BISHOP, 2, 0);
-    add_piece("img/bb.png", -BISHOP, 5, 0);
-    add_piece("img/wb.png", +BISHOP, 2, 7);
-    add_piece("img/wb.png", +BISHOP, 5, 7);
+static void generate_pieces(GtkOverlay *overlay) {
+    board = GTK_DRAWING_AREA(gtk_drawing_area_new());
+    gtk_widget_set_size_request(GTK_WIDGET(board), 512, 512);
+    g_signal_connect(board, "draw", G_CALLBACK(draw_board), NULL);
 
-    add_piece("img/bq.png", -QUEEN, 3, 0);
-    add_piece("img/wq.png", +QUEEN, 3, 7);
+    for (int i = 0; i < 8; ++i) {
+        add_piece(-PAWN, i, 1);
+        add_piece(+PAWN, i, 6);
+    }
 
-    add_piece("img/bk.png", -KING, 4, 0);
-    add_piece("img/wk.png", +KING, 4, 7);
+    add_piece(-ROOK, 0, 0);
+    add_piece(-ROOK, 7, 0);
+    add_piece(+ROOK, 0, 7);
+    add_piece(+ROOK, 7, 7);
+
+    add_piece(-KNIGHT, 1, 0);
+    add_piece(-KNIGHT, 6, 0);
+    add_piece(+KNIGHT, 1, 7);
+    add_piece(+KNIGHT, 6, 7);
+
+    add_piece(-BISHOP, 2, 0);
+    add_piece(-BISHOP, 5, 0);
+    add_piece(+BISHOP, 2, 7);
+    add_piece(+BISHOP, 5, 7);
+
+    add_piece(-QUEEN, 3, 0);
+    add_piece(+QUEEN, 3, 7);
+
+    add_piece(-KING, 4, 0);
+    add_piece(+KING, 4, 7);
 
     gtk_overlay_add_overlay(overlay, GTK_WIDGET(board));
 }
@@ -144,7 +192,7 @@ void atop_init(int *argc, char ***argv) {
     g_signal_connect(win, "motion_notify_event", G_CALLBACK(mouse_moved), NULL);
     g_signal_connect(win, "button_release_event", G_CALLBACK(mouse_released), NULL);
 
-    generate_board(GTK_GRID(gtk_builder_get_object(builder, "board")));
+    initialize_images();
     generate_pieces(GTK_OVERLAY(gtk_builder_get_object(builder, "overlay")));
 
     gtk_widget_show_all(GTK_WIDGET(win));
