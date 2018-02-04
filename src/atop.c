@@ -138,8 +138,7 @@ static gboolean draw_board(GtkWidget *widget, cairo_t *cr, gpointer data) {
     return FALSE;
 }
 
-static void generate_pieces(GtkOverlay *overlay) {
-    board = GTK_DRAWING_AREA(gtk_drawing_area_new());
+static void generate_pieces() {
     gtk_widget_set_size_request(GTK_WIDGET(board), 512, 512);
     g_signal_connect(board, "draw", G_CALLBACK(draw_board), NULL);
 
@@ -168,8 +167,6 @@ static void generate_pieces(GtkOverlay *overlay) {
 
     add_piece(-KING, 4, 0);
     add_piece(+KING, 4, 7);
-
-    gtk_overlay_add_overlay(overlay, GTK_WIDGET(board));
 }
 
 void atop_init(int *argc, char ***argv) {
@@ -193,7 +190,8 @@ void atop_init(int *argc, char ***argv) {
     g_signal_connect(win, "button_release_event", G_CALLBACK(mouse_released), NULL);
 
     initialize_images();
-    generate_pieces(GTK_OVERLAY(gtk_builder_get_object(builder, "overlay")));
+    board = GTK_DRAWING_AREA(gtk_builder_get_object(builder, "board"));
+    generate_pieces();
 
     gtk_widget_show_all(GTK_WIDGET(win));
 
