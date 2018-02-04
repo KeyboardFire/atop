@@ -1,0 +1,10 @@
+<interface>
+    <object id='window' class='GtkWindow'>
+        <property name='visible'>True</property>
+        <property name='title'>atop</property>
+
+        <child><object id='overlay' class='GtkOverlay'>
+            <child><object id='board' class='GtkGrid'></object></child>
+        </object></child>
+    </object>
+</interface>
