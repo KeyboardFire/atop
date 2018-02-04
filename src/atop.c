@@ -21,6 +21,8 @@
 #include <gtk/gtk.h>
 #include <stdlib.h>
 
+#define M_PI 3.14159265358979323846
+
 #define PAWN   1
 #define KNIGHT 2
 #define BISHOP 3
@@ -35,6 +37,7 @@ static int click_x, click_y, hover_x, hover_y;
 static float offset_x, offset_y;
 
 static int pieces[8][8];
+static int legal[8][8];
 static int clicked;
 
 static cairo_surface_t *img_piece[NP*2+1];
@@ -65,10 +68,89 @@ static void initialize_images() {
     img_light = cairo_image_surface_create_from_png("img/white.png");
 }
 
+static void update_legal(int type, int color, int fx, int fy) {
+    if (type == PAWN) {
+        if (!pieces[fx][fy-color]) {
+            legal[fx][fy-color] = 1;
+            if ((color == 1 ? fy == 6 : fy == 1) && !pieces[fx][fy-2*color]) {
+                legal[fx][fy-2*color] = 1;
+            }
+        }
+        if (fx > 0 && color*pieces[fx-1][fy-color] < 0) legal[fx-1][fy-color] = 1;
+        if (fx < 7 && color*pieces[fx+1][fy-color] < 0) legal[fx+1][fy-color] = 1;
+        return;
+    }
+
+    if (type == KNIGHT) {
+        if (fx+1 <  8 && fy+2 <  8 && color*pieces[fx+1][fy+2] <= 0) legal[fx+1][fy+2] = 1;
+        if (fx+1 <  8 && fy-2 >= 0 && color*pieces[fx+1][fy-2] <= 0) legal[fx+1][fy-2] = 1;
+        if (fx+2 <  8 && fy+1 <  8 && color*pieces[fx+2][fy+1] <= 0) legal[fx+2][fy+1] = 1;
+        if (fx+2 <  8 && fy-1 >= 0 && color*pieces[fx+2][fy-1] <= 0) legal[fx+2][fy-1] = 1;
+        if (fx-1 >= 0 && fy+2 <  8 && color*pieces[fx-1][fy+2] <= 0) legal[fx-1][fy+2] = 1;
+        if (fx-1 >= 0 && fy-2 >= 0 && color*pieces[fx-1][fy-2] <= 0) legal[fx-1][fy-2] = 1;
+        if (fx-2 >= 0 && fy+1 <  8 && color*pieces[fx-2][fy+1] <= 0) legal[fx-2][fy+1] = 1;
+        if (fx-2 >= 0 && fy-1 >= 0 && color*pieces[fx-2][fy-1] <= 0) legal[fx-2][fy-1] = 1;
+        return;
+    }
+
+    if (type == KING) {
+        if (fx-1 >= 0 && fy-1 >= 0 && !pieces[fx-1][fy-1]) legal[fx-1][fy-1] = 1;
+        if (fx-1 >= 0              && !pieces[fx-1][fy])   legal[fx-1][fy]   = 1;
+        if (fx-1 >= 0 && fy+1 <  8 && !pieces[fx-1][fy+1]) legal[fx-1][fy+1] = 1;
+        if (             fy-1 >= 0 && !pieces[fx][fy-1])   legal[fx][fy-1]   = 1;
+        if (             fy+1 <  8 && !pieces[fx][fy+1])   legal[fx][fy+1]   = 1;
+        if (fx+1 <  8 && fy-1 >= 0 && !pieces[fx+1][fy-1]) legal[fx+1][fy-1] = 1;
+        if (fx+1 <  8              && !pieces[fx+1][fy])   legal[fx+1][fy]   = 1;
+        if (fx+1 <  8 && fy+1 <  8 && !pieces[fx+1][fy+1]) legal[fx+1][fy+1] = 1;
+        return;
+    }
+
+    if (type == ROOK || type == QUEEN) {
+        for (int i = 1; fx+i < 8; ++i) {
+            legal[fx+i][fy] = color*pieces[fx+i][fy] <= 0;
+            if (pieces[fx+i][fy]) break;
+        }
+        for (int i = 1; fx-i >= 0; ++i) {
+            legal[fx-i][fy] = color*pieces[fx-i][fy] <= 0;
+            if (pieces[fx-i][fy]) break;
+        }
+        for (int i = 1; fy+i < 8; ++i) {
+            legal[fx][fy+i] = color*pieces[fx][fy+i] <= 0;
+            if (pieces[fx][fy+i]) break;
+        }
+        for (int i = 1; fy-i >= 0; ++i) {
+            legal[fx][fy-i] = color*pieces[fx][fy-i] <= 0;
+            if (pieces[fx][fy-i]) break;
+        }
+    }
+
+    if (type == BISHOP || type == QUEEN) {
+        for (int i = 1; fx+i < 8 && fy+i < 8; ++i) {
+            legal[fx+i][fy+i] = color*pieces[fx+i][fy+i] <= 0;
+            if (pieces[fx+i][fy+i]) break;
+        }
+        for (int i = 1; fx+i < 8 && fy-i >= 0; ++i) {
+            legal[fx+i][fy-i] = color*pieces[fx+i][fy-i] <= 0;
+            if (pieces[fx+i][fy-i]) break;
+        }
+        for (int i = 1; fx-i >= 0 && fy+i < 8; ++i) {
+            legal[fx-i][fy+i] = color*pieces[fx-i][fy+i] <= 0;
+            if (pieces[fx-i][fy+i]) break;
+        }
+        for (int i = 1; fx-i >= 0 && fy-i >= 0; ++i) {
+            legal[fx-i][fy-i] = color*pieces[fx-i][fy-i] <= 0;
+            if (pieces[fx-i][fy-i]) break;
+        }
+    }
+}
+
 static gboolean mouse_pressed(GtkWidget *widget, GdkEventButton *event, gpointer data) {
     click_x = event->x / 64;
     click_y = event->y / 64;
-    if (click_x < 8 || click_y < 8) clicked = pieces[click_x][click_y];
+    if (click_x < 8 || click_y < 8) {
+        clicked = pieces[click_x][click_y];
+        update_legal(abs(clicked), (clicked > 0) - (clicked < 0), click_x, click_y);
+    }
 
     gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
 
@@ -92,10 +174,17 @@ static gboolean mouse_moved(GtkWidget *widget, GdkEventMotion *event, gpointer d
 
 static gboolean mouse_released(GtkWidget *widget, GdkEventButton *event, gpointer data) {
     if (clicked) {
-        pieces[hover_x][hover_y] = clicked;
-        pieces[click_x][click_y] = 0;
+        if (legal[hover_x][hover_y]) {
+            pieces[hover_x][hover_y] = clicked;
+            pieces[click_x][click_y] = 0;
+        }
 
         clicked = 0;
+        for (int i = 0; i < 8; ++i) {
+            for (int j = 0; j < 8; ++j) {
+                legal[i][j] = 0;
+            }
+        }
     }
 
     gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
@@ -121,6 +210,13 @@ static gboolean draw_board(GtkWidget *widget, cairo_t *cr, gpointer data) {
             if (pieces[i][j] && !(clicked && click_x == i && click_y == j)) {
                 cairo_set_source_surface(cr, img_piece[NP+pieces[i][j]], i*64, j*64);
                 cairo_paint(cr);
+            }
+
+            // draw indicator if we can move here
+            if (legal[i][j]) {
+                cairo_set_source_rgb(cr, 0.2, 0.6, 0.1);
+                cairo_arc(cr, i*64+32, j*64+32, 30, 0, 2*M_PI);
+                cairo_stroke(cr);
             }
         }
     }
