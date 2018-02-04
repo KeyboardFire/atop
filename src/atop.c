@@ -48,10 +48,6 @@ static void apply_css(GtkWidget *widget, GtkStyleProvider *provider) {
     }
 }
 
-static void add_piece(int type, int x, int y) {
-    pieces[x][y] = type;
-}
-
 static void initialize_images() {
     img_piece[NP-PAWN]   = cairo_image_surface_create_from_png("img/bp.png");
     img_piece[NP-KNIGHT] = cairo_image_surface_create_from_png("img/bn.png");
@@ -138,35 +134,26 @@ static gboolean draw_board(GtkWidget *widget, cairo_t *cr, gpointer data) {
     return FALSE;
 }
 
-static void generate_pieces() {
-    gtk_widget_set_size_request(GTK_WIDGET(board), 512, 512);
-    g_signal_connect(board, "draw", G_CALLBACK(draw_board), NULL);
-
+static void initialize_pieces() {
     for (int i = 0; i < 8; ++i) {
-        add_piece(-PAWN, i, 1);
-        add_piece(+PAWN, i, 6);
+        pieces[i][1] = -PAWN;
+        pieces[i][6] = +PAWN;
     }
 
-    add_piece(-ROOK, 0, 0);
-    add_piece(-ROOK, 7, 0);
-    add_piece(+ROOK, 0, 7);
-    add_piece(+ROOK, 7, 7);
+    pieces[0][0] = pieces[7][0] = -ROOK;
+    pieces[0][7] = pieces[7][7] = +ROOK;
 
-    add_piece(-KNIGHT, 1, 0);
-    add_piece(-KNIGHT, 6, 0);
-    add_piece(+KNIGHT, 1, 7);
-    add_piece(+KNIGHT, 6, 7);
+    pieces[1][0] = pieces[6][0] = -KNIGHT;
+    pieces[1][7] = pieces[6][7] = +KNIGHT;
 
-    add_piece(-BISHOP, 2, 0);
-    add_piece(-BISHOP, 5, 0);
-    add_piece(+BISHOP, 2, 7);
-    add_piece(+BISHOP, 5, 7);
+    pieces[2][0] = pieces[5][0] = -BISHOP;
+    pieces[2][7] = pieces[5][7] = +BISHOP;
 
-    add_piece(-QUEEN, 3, 0);
-    add_piece(+QUEEN, 3, 7);
+    pieces[3][0] = -QUEEN;
+    pieces[3][7] = +QUEEN;
 
-    add_piece(-KING, 4, 0);
-    add_piece(+KING, 4, 7);
+    pieces[4][0] = -KING;
+    pieces[4][7] = +KING;
 }
 
 void atop_init(int *argc, char ***argv) {
@@ -189,9 +176,12 @@ void atop_init(int *argc, char ***argv) {
     g_signal_connect(win, "motion_notify_event", G_CALLBACK(mouse_moved), NULL);
     g_signal_connect(win, "button_release_event", G_CALLBACK(mouse_released), NULL);
 
-    initialize_images();
     board = GTK_DRAWING_AREA(gtk_builder_get_object(builder, "board"));
-    generate_pieces();
+    gtk_widget_set_size_request(GTK_WIDGET(board), 512, 512);
+    g_signal_connect(board, "draw", G_CALLBACK(draw_board), NULL);
+
+    initialize_images();
+    initialize_pieces();
 
     gtk_widget_show_all(GTK_WIDGET(win));
 
