@@ -39,52 +39,49 @@ static void generate_board(GtkGrid *grid) {
     }
 }
 
+static gboolean piece_clicked(GtkWidget *eb, GdkEventButton *event,
+        gpointer data) {
+    g_print("%f %f\n", event->x, event->y);
+    return TRUE;
+}
+
+static void add_piece(GtkFixed *fixed, char *path, int x, int y) {
+    GtkWidget *piece = gtk_image_new_from_file(path);
+    GtkWidget *eb = gtk_event_box_new();
+    gtk_container_add(GTK_CONTAINER(eb), piece);
+    g_signal_connect(G_OBJECT(eb), "button_press_event",
+            G_CALLBACK(piece_clicked), piece);
+    gtk_fixed_put(fixed, eb, x*64, y*64);
+}
+
 static void generate_pieces(GtkOverlay *overlay) {
     GtkFixed *fixed = GTK_FIXED(gtk_fixed_new());
 
     for (int i = 0; i < 8; ++i) {
-        GtkWidget *bp = gtk_image_new_from_file("img/bp.png");
-        GtkWidget *wp = gtk_image_new_from_file("img/wp.png");
-        gtk_fixed_put(fixed, bp, i*64, 64);
-        gtk_fixed_put(fixed, wp, i*64, 6*64);
+        add_piece(fixed, "img/bp.png", i, 1);
+        add_piece(fixed, "img/wp.png", i, 6);
     }
 
-    GtkWidget *br1 = gtk_image_new_from_file("img/br.png");
-    GtkWidget *br2 = gtk_image_new_from_file("img/br.png");
-    GtkWidget *wr1 = gtk_image_new_from_file("img/wr.png");
-    GtkWidget *wr2 = gtk_image_new_from_file("img/wr.png");
-    gtk_fixed_put(fixed, br1, 0*64, 0);
-    gtk_fixed_put(fixed, br2, 7*64, 0);
-    gtk_fixed_put(fixed, wr1, 0*64, 7*64);
-    gtk_fixed_put(fixed, wr2, 7*64, 7*64);
+    add_piece(fixed, "img/br.png", 0, 0);
+    add_piece(fixed, "img/br.png", 7, 0);
+    add_piece(fixed, "img/wr.png", 0, 7);
+    add_piece(fixed, "img/wr.png", 7, 7);
 
-    GtkWidget *bn1 = gtk_image_new_from_file("img/bn.png");
-    GtkWidget *bn2 = gtk_image_new_from_file("img/bn.png");
-    GtkWidget *wn1 = gtk_image_new_from_file("img/wn.png");
-    GtkWidget *wn2 = gtk_image_new_from_file("img/wn.png");
-    gtk_fixed_put(fixed, bn1, 1*64, 0);
-    gtk_fixed_put(fixed, bn2, 6*64, 0);
-    gtk_fixed_put(fixed, wn1, 1*64, 7*64);
-    gtk_fixed_put(fixed, wn2, 6*64, 7*64);
+    add_piece(fixed, "img/bn.png", 1, 0);
+    add_piece(fixed, "img/bn.png", 6, 0);
+    add_piece(fixed, "img/wn.png", 1, 7);
+    add_piece(fixed, "img/wn.png", 6, 7);
 
-    GtkWidget *bb1 = gtk_image_new_from_file("img/bb.png");
-    GtkWidget *bb2 = gtk_image_new_from_file("img/bb.png");
-    GtkWidget *wb1 = gtk_image_new_from_file("img/wb.png");
-    GtkWidget *wb2 = gtk_image_new_from_file("img/wb.png");
-    gtk_fixed_put(fixed, bb1, 2*64, 0);
-    gtk_fixed_put(fixed, bb2, 5*64, 0);
-    gtk_fixed_put(fixed, wb1, 2*64, 7*64);
-    gtk_fixed_put(fixed, wb2, 5*64, 7*64);
+    add_piece(fixed, "img/bb.png", 2, 0);
+    add_piece(fixed, "img/bb.png", 5, 0);
+    add_piece(fixed, "img/wb.png", 2, 7);
+    add_piece(fixed, "img/wb.png", 5, 7);
 
-    GtkWidget *bq = gtk_image_new_from_file("img/bq.png");
-    GtkWidget *wq = gtk_image_new_from_file("img/wq.png");
-    gtk_fixed_put(fixed, bq, 3*64, 0);
-    gtk_fixed_put(fixed, wq, 3*64, 7*64);
+    add_piece(fixed, "img/bq.png", 3, 0);
+    add_piece(fixed, "img/wq.png", 3, 7);
 
-    GtkWidget *bk = gtk_image_new_from_file("img/bk.png");
-    GtkWidget *wk = gtk_image_new_from_file("img/wk.png");
-    gtk_fixed_put(fixed, bk, 4*64, 0);
-    gtk_fixed_put(fixed, wk, 4*64, 7*64);
+    add_piece(fixed, "img/bk.png", 4, 0);
+    add_piece(fixed, "img/wk.png", 4, 7);
 
     gtk_overlay_add_overlay(overlay, GTK_WIDGET(fixed));
 }
