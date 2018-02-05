@@ -42,6 +42,9 @@ static int pieces[8][8];
 static int legal[8][8];
 static int clicked;
 
+static int **hist;
+int nhist;
+
 static cairo_surface_t *img_piece[NP*2+1];
 static cairo_surface_t *img_dark;
 static cairo_surface_t *img_light;
@@ -239,14 +242,18 @@ static void update_legal(int type, int color, int fx, int fy) {
 static gboolean mouse_pressed(GtkWidget *widget, GdkEventButton *event, gpointer data) {
     (void)widget; (void)data;
 
-    click_x = event->x / 64;
-    click_y = event->y / 64;
-    if (click_x < 8 || click_y < 8) {
-        clicked = pieces[click_x][click_y];
-        update_legal(abs(clicked), (clicked > 0) - (clicked < 0), click_x, click_y);
+    if (event->button == 1) {
+        click_x = event->x / 64;
+        click_y = event->y / 64;
+        if (click_x < 8 && click_y < 8 && pieces[click_x][click_y] * (nhist%2*2-1) < 0) {
+            clicked = pieces[click_x][click_y];
+            update_legal(abs(clicked), (clicked > 0) - (clicked < 0), click_x, click_y);
+            gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
+        }
+    } else if (event->button == 3) {
+        memcpy(pieces, hist[--nhist], sizeof pieces);
+        gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
     }
-
-    gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
 
     return TRUE;
 }
@@ -273,6 +280,10 @@ static gboolean mouse_released(GtkWidget *widget, GdkEventButton *event, gpointe
 
     if (clicked) {
         if (legal[hover_x][hover_y]) {
+            hist = realloc(hist, ++nhist * sizeof *hist);
+            hist[nhist-1] = malloc(sizeof pieces);
+            memcpy(hist[nhist-1], pieces, sizeof pieces);
+
             pieces[hover_x][hover_y] = clicked;
             pieces[click_x][click_y] = 0;
 
