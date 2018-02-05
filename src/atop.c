@@ -149,6 +149,7 @@ static void save_db() {
     FILE *f = fopen("atop.db", "wb");
     write_node(f, db);
     fputc(255, f);
+    fclose(f);
 }
 
 static void apply_css(GtkWidget *widget, GtkStyleProvider *provider) {
@@ -279,6 +280,8 @@ static gboolean mouse_pressed(GtkWidget *widget, GdkEventButton *event, gpointer
     } else if (event->button == 3 && nhist) {
         memcpy(pieces, hist[--nhist], sizeof pieces);
         free(hist[nhist]);
+        cur_node = cur_node->parent;
+        update_moves();
         gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
     }
 
@@ -324,6 +327,7 @@ static gboolean mouse_released(GtkWidget *widget, GdkEventButton *event, gpointe
             }
 
             struct move *new_move = new_node();
+            new_move->parent = cur_node;
             new_move->from = SQ(click_x, click_y);
             new_move->to = SQ(hover_x, hover_y);
             new_move->desc = "this is a description";
