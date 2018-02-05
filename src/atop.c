@@ -33,6 +33,8 @@
 #define NP     KING
 
 #define SQ(x,y) ((x)*8+(y))
+#define X(sq) ((sq)/8)
+#define Y(sq) ((sq)%8)
 
 static GtkDrawingArea *board;
 static GtkGrid *moves;
@@ -165,7 +167,17 @@ static void update_moves() {
     if (!db) return;
 
     for (struct move *m = cur_node->child; m; m = m->next) {
+        char *header = malloc(20);
+        sprintf(header, "%c%d to %c%d",
+                'a'+X(m->from), 1+Y(m->from),
+                'a'+X(m->to), 1+Y(m->to));
+        GtkLabel *head = GTK_LABEL(gtk_label_new(header));
+        free(header);
+
         GtkLabel *txt = GTK_LABEL(gtk_label_new(m->desc));
+
+        gtk_grid_attach_next_to(moves, GTK_WIDGET(head), NULL, GTK_POS_BOTTOM, 1, 1);
+        gtk_widget_show(GTK_WIDGET(head));
         gtk_grid_attach_next_to(moves, GTK_WIDGET(txt), NULL, GTK_POS_BOTTOM, 1, 1);
         gtk_widget_show(GTK_WIDGET(txt));
     }
@@ -443,9 +455,9 @@ void atop_init(int *argc, char ***argv) {
 
     moves = GTK_GRID(gtk_builder_get_object(builder, "moves"));
     gtk_widget_set_size_request(GTK_WIDGET(gtk_builder_get_object(builder, "scroll")), 256, 512);
+    initialize_db();
     update_moves();
 
-    initialize_db();
     initialize_images();
     initialize_pieces();
 
