@@ -20,6 +20,7 @@
 
 #include <gtk/gtk.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define M_PI 3.14159265358979323846
 
@@ -45,6 +46,86 @@ static cairo_surface_t *img_piece[NP*2+1];
 static cairo_surface_t *img_dark;
 static cairo_surface_t *img_light;
 
+struct move {
+    int from;
+    int to;
+    char *desc;
+    struct move *next;
+    struct move *child;
+    struct move *parent;
+};
+struct move *db;
+
+#define BUF_SIZE 1024
+#define PENDING_FROM 0
+#define PENDING_TO   1
+#define READING_DESC 2
+static struct move* new_node() {
+    struct move *node = malloc(sizeof *node);
+    node->desc = NULL;
+    node->next = NULL;
+    node->child = NULL;
+    node->parent = NULL;
+    return node;
+}
+
+static void initialize_db() {
+    struct move *parent = NULL;
+    struct move **cur = &db;
+
+    FILE *f = fopen("atop.db", "rb");
+    if (!f) return;
+    unsigned char buf[BUF_SIZE];
+    size_t nread;
+
+    size_t idx = 0, state = PENDING_FROM;
+    while (idx != nread && (idx = 0, (nread = fread(buf, 1, BUF_SIZE, f)) > 0)) {
+        switch (state) {
+            case PENDING_FROM:
+                if (buf[idx] == 0xff) {
+                    if (parent) {
+                        cur = &parent->next;
+                        parent = parent->parent;
+                    } else {
+                        fclose(f);
+                        return;
+                    }
+                } else {
+                    *cur = new_node();
+                    (*cur)->parent = parent;
+                    (*cur)->from = buf[idx];
+                    state = PENDING_TO;
+                }
+                ++idx;
+                break;
+            case PENDING_TO:
+                (*cur)->to = buf[idx++];
+                state = READING_DESC;
+                break;
+            case READING_DESC: {
+                size_t max = nread - idx,
+                       len = strnlen(buf + idx, max),
+                       prevlen = (*cur)->desc ? strlen((*cur)->desc) : 0;
+
+                (*cur)->desc = realloc((*cur)->desc, prevlen + len + 1);
+                strncpy((*cur)->desc + prevlen, buf + idx, len);
+                (*cur)->desc[prevlen + len] = '\0';
+
+                idx += len;
+                if (max != len) {
+                    parent = *cur;
+                    cur = &(*cur)->child;
+                    state = PENDING_FROM;
+                    ++idx;
+                }
+                break;
+            }
+        }
+    }
+
+    fclose(f);
+}
+
 static void apply_css(GtkWidget *widget, GtkStyleProvider *provider) {
     gtk_style_context_add_provider(gtk_widget_get_style_context(widget), provider, G_MAXUINT);
     if (GTK_IS_CONTAINER(widget)) {
@@ -56,7 +137,7 @@ static void update_moves() {
     gtk_container_foreach(GTK_CONTAINER(moves), (GtkCallback)gtk_widget_destroy, NULL);
 
     for (int i = 0; i < 100; ++i) {
-        GtkLabel *txt = gtk_label_new("meems");
+        GtkLabel *txt = GTK_LABEL(gtk_label_new("meems"));
         gtk_grid_attach_next_to(moves, GTK_WIDGET(txt), NULL, GTK_POS_BOTTOM, 1, 1);
         gtk_widget_show(GTK_WIDGET(txt));
     }
@@ -156,6 +237,8 @@ static void update_legal(int type, int color, int fx, int fy) {
 }
 
 static gboolean mouse_pressed(GtkWidget *widget, GdkEventButton *event, gpointer data) {
+    (void)widget; (void)data;
+
     click_x = event->x / 64;
     click_y = event->y / 64;
     if (click_x < 8 || click_y < 8) {
@@ -169,6 +252,8 @@ static gboolean mouse_pressed(GtkWidget *widget, GdkEventButton *event, gpointer
 }
 
 static gboolean mouse_moved(GtkWidget *widget, GdkEventMotion *event, gpointer data) {
+    (void)widget; (void)data;
+
     hover_x = event->x / 64;
     hover_y = event->y / 64;
     if (hover_x >= 8 || hover_y >= 8) {
@@ -184,6 +269,8 @@ static gboolean mouse_moved(GtkWidget *widget, GdkEventMotion *event, gpointer d
 }
 
 static gboolean mouse_released(GtkWidget *widget, GdkEventButton *event, gpointer data) {
+    (void)widget; (void)event; (void)data;
+
     if (clicked) {
         if (legal[hover_x][hover_y]) {
             pieces[hover_x][hover_y] = clicked;
@@ -206,6 +293,8 @@ static gboolean mouse_released(GtkWidget *widget, GdkEventButton *event, gpointe
 }
 
 static gboolean draw_board(GtkWidget *widget, cairo_t *cr, gpointer data) {
+    (void)widget; (void)data;
+
     for (int i = 0; i < 8; ++i) {
         for (int j = 0; j < 8; ++j) {
             // draw square
@@ -293,6 +382,7 @@ void atop_init(int *argc, char ***argv) {
     gtk_widget_set_size_request(GTK_WIDGET(gtk_builder_get_object(builder, "scroll")), 256, 512);
     update_moves();
 
+    initialize_db();
     initialize_images();
     initialize_pieces();
 
