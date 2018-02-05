@@ -178,11 +178,14 @@ static void update_moves() {
                 'a'+X(m->from), 8-Y(m->from),
                 'a'+X(m->to), 8-Y(m->to));
         GtkLabel *head = GTK_LABEL(gtk_label_new(header));
+        gtk_label_set_xalign(head, 0);
         GtkEventBox *headbox = GTK_EVENT_BOX(gtk_event_box_new());
         gtk_container_add(GTK_CONTAINER(headbox), GTK_WIDGET(head));
         free(header);
 
         GtkLabel *txt = GTK_LABEL(gtk_label_new(m->desc));
+        gtk_label_set_line_wrap(txt, TRUE);
+        gtk_label_set_xalign(txt, 0);
         GtkEventBox *txtbox = GTK_EVENT_BOX(gtk_event_box_new());
         gtk_container_add(GTK_CONTAINER(txtbox), GTK_WIDGET(txt));
 
@@ -309,7 +312,7 @@ static void perform_move(int from, int to) {
     new_move->parent = cur_node;
     new_move->from = from;
     new_move->to = to;
-    new_move->desc = "this is a description";
+    new_move->desc = "this is a description sldk fs ls lwflew kewk jfds sd lwe lwlek fsl lsdl sdl lwe lkfwel jes fldf lwle flkwef ld ewlkf";
     if (prev) prev->next = new_move;
     else cur_node->child = new_move;
 
