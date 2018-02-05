@@ -96,6 +96,7 @@ static void initialize_db() {
                         parent = parent->parent;
                     } else {
                         fclose(f);
+                        cur_node = db;
                         return;
                     }
                 } else {
@@ -164,7 +165,7 @@ static void apply_css(GtkWidget *widget, GtkStyleProvider *provider) {
 static void update_moves() {
     gtk_container_foreach(GTK_CONTAINER(moves), (GtkCallback)gtk_widget_destroy, NULL);
 
-    if (!db) return;
+    if (!cur_node) return;
 
     for (struct move *m = cur_node->child; m; m = m->next) {
         char *header = malloc(20);
