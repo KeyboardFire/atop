@@ -32,6 +32,8 @@
 #define KING   6
 #define NP     KING
 
+#define SQ(x,y) ((x)*8+(y))
+
 static GtkDrawingArea *board;
 static GtkGrid *moves;
 
@@ -58,6 +60,7 @@ struct move {
     struct move *parent;
 };
 struct move *db;
+struct move *cur_node;
 
 #define BUF_SIZE 1024
 #define PENDING_FROM 0
@@ -127,6 +130,25 @@ static void initialize_db() {
     }
 
     fclose(f);
+    cur_node = db;
+}
+
+static void write_node(FILE *f, struct move *node) {
+    if (!node) return;
+
+    fputc(node->from, f);
+    fputc(node->to, f);
+    fputs(node->desc, f);
+    fputc(0, f);
+    write_node(f, node->child);
+    fputc(255, f);
+    write_node(f, node->next);
+}
+
+static void save_db() {
+    FILE *f = fopen("atop.db", "wb");
+    write_node(f, db);
+    fputc(255, f);
 }
 
 static void apply_css(GtkWidget *widget, GtkStyleProvider *provider) {
@@ -139,8 +161,10 @@ static void apply_css(GtkWidget *widget, GtkStyleProvider *provider) {
 static void update_moves() {
     gtk_container_foreach(GTK_CONTAINER(moves), (GtkCallback)gtk_widget_destroy, NULL);
 
-    for (int i = 0; i < 100; ++i) {
-        GtkLabel *txt = GTK_LABEL(gtk_label_new("meems"));
+    if (!db) return;
+
+    for (struct move *m = cur_node->child; m; m = m->next) {
+        GtkLabel *txt = GTK_LABEL(gtk_label_new(m->desc));
         gtk_grid_attach_next_to(moves, GTK_WIDGET(txt), NULL, GTK_POS_BOTTOM, 1, 1);
         gtk_widget_show(GTK_WIDGET(txt));
     }
@@ -290,6 +314,27 @@ static gboolean mouse_released(GtkWidget *widget, GdkEventButton *event, gpointe
             pieces[hover_x][hover_y] = clicked;
             pieces[click_x][click_y] = 0;
 
+            struct move *prev = NULL;
+            if (cur_node)
+            for (struct move *m = cur_node->child; m; prev = m, m = m->next) {
+                if (m->from == SQ(click_x, click_y) && m->to == SQ(hover_x, hover_y)) {
+                    cur_node = m;
+                    goto done;
+                }
+            }
+
+            struct move *new_move = new_node();
+            new_move->from = SQ(click_x, click_y);
+            new_move->to = SQ(hover_x, hover_y);
+            new_move->desc = "this is a description";
+            if (!cur_node) db = new_move;
+            else if (prev) prev->next = new_move;
+            else cur_node->child = new_move;
+
+            cur_node = new_move;
+            done:
+
+            save_db();
             update_moves();
         }
 
