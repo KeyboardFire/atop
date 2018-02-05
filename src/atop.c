@@ -78,52 +78,50 @@ static struct move* new_node() {
 }
 
 static void initialize_db() {
-    struct move *parent = NULL;
-    struct move **cur = &db;
+    db = new_node();
+    struct move *cur = db;
+    cur_node = db;
+    int child = 1;
 
     FILE *f = fopen("atop.db", "rb");
     if (!f) return;
     unsigned char buf[BUF_SIZE];
-    size_t nread;
+    size_t nread = 0;
 
     size_t idx = 0, state = PENDING_FROM;
-    while (idx != nread && (idx = 0, (nread = fread(buf, 1, BUF_SIZE, f)) > 0)) {
+    while (idx != nread || (idx = 0, (nread = fread(buf, 1, BUF_SIZE, f)) > 0)) {
         switch (state) {
             case PENDING_FROM:
                 if (buf[idx] == 0xff) {
-                    if (parent) {
-                        cur = &parent->next;
-                        parent = parent->parent;
-                    } else {
-                        fclose(f);
-                        cur_node = db;
-                        return;
-                    }
+                    if (child) child = 0;
+                    else if (cur->parent) cur = cur->parent;
+                    else goto done;
                 } else {
-                    *cur = new_node();
-                    (*cur)->parent = parent;
-                    (*cur)->from = buf[idx];
+                    struct move *new = new_node();
+                    new->parent = cur;
+                    new->from = buf[idx];
+                    if (child) cur->child = new, cur = new;
+                    else cur->next = new, cur = new;
                     state = PENDING_TO;
                 }
                 ++idx;
                 break;
             case PENDING_TO:
-                (*cur)->to = buf[idx++];
+                cur->to = buf[idx++];
                 state = READING_DESC;
                 break;
             case READING_DESC: {
                 size_t max = nread - idx,
                        len = strnlen(buf + idx, max),
-                       prevlen = (*cur)->desc ? strlen((*cur)->desc) : 0;
+                       prevlen = cur->desc ? strlen(cur->desc) : 0;
 
-                (*cur)->desc = realloc((*cur)->desc, prevlen + len + 1);
-                strncpy((*cur)->desc + prevlen, buf + idx, len);
-                (*cur)->desc[prevlen + len] = '\0';
+                cur->desc = realloc(cur->desc, prevlen + len + 1);
+                strncpy(cur->desc + prevlen, buf + idx, len);
+                cur->desc[prevlen + len] = '\0';
 
                 idx += len;
                 if (max != len) {
-                    parent = *cur;
-                    cur = &(*cur)->child;
+                    child = 1;
                     state = PENDING_FROM;
                     ++idx;
                 }
@@ -132,8 +130,8 @@ static void initialize_db() {
         }
     }
 
+done:
     fclose(f);
-    cur_node = db;
 }
 
 static void write_node(FILE *f, struct move *node) {
@@ -150,7 +148,7 @@ static void write_node(FILE *f, struct move *node) {
 
 static void save_db() {
     FILE *f = fopen("atop.db", "wb");
-    write_node(f, db);
+    write_node(f, db->child);
     fputc(255, f);
     fclose(f);
 }
@@ -164,8 +162,6 @@ static void apply_css(GtkWidget *widget, GtkStyleProvider *provider) {
 
 static void update_moves() {
     gtk_container_foreach(GTK_CONTAINER(moves), (GtkCallback)gtk_widget_destroy, NULL);
-
-    if (!cur_node) return;
 
     for (struct move *m = cur_node->child; m; m = m->next) {
         char *header = malloc(20);
@@ -331,7 +327,6 @@ static gboolean mouse_released(GtkWidget *widget, GdkEventButton *event, gpointe
             pieces[click_x][click_y] = 0;
 
             struct move *prev = NULL;
-            if (cur_node)
             for (struct move *m = cur_node->child; m; prev = m, m = m->next) {
                 if (m->from == SQ(click_x, click_y) && m->to == SQ(hover_x, hover_y)) {
                     cur_node = m;
@@ -344,8 +339,7 @@ static gboolean mouse_released(GtkWidget *widget, GdkEventButton *event, gpointe
             new_move->from = SQ(click_x, click_y);
             new_move->to = SQ(hover_x, hover_y);
             new_move->desc = "this is a description";
-            if (!cur_node) db = new_move;
-            else if (prev) prev->next = new_move;
+            if (prev) prev->next = new_move;
             else cur_node->child = new_move;
 
             cur_node = new_move;
