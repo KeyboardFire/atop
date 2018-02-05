@@ -242,6 +242,8 @@ static void update_legal(int type, int color, int fx, int fy) {
 static gboolean mouse_pressed(GtkWidget *widget, GdkEventButton *event, gpointer data) {
     (void)widget; (void)data;
 
+    if (event->type != GDK_BUTTON_PRESS) return TRUE;
+
     if (event->button == 1) {
         click_x = event->x / 64;
         click_y = event->y / 64;
@@ -250,8 +252,9 @@ static gboolean mouse_pressed(GtkWidget *widget, GdkEventButton *event, gpointer
             update_legal(abs(clicked), (clicked > 0) - (clicked < 0), click_x, click_y);
             gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
         }
-    } else if (event->button == 3) {
+    } else if (event->button == 3 && nhist) {
         memcpy(pieces, hist[--nhist], sizeof pieces);
+        free(hist[nhist]);
         gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
     }
 
