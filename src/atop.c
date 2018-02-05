@@ -160,24 +160,40 @@ static void apply_css(GtkWidget *widget, GtkStyleProvider *provider) {
     }
 }
 
+static void perform_move(int from, int to);
+static gboolean move_clicked(GtkWidget *widget, GdkEventButton *event, gpointer data) {
+    (void)widget; (void)event;
+    struct move *move = (struct move*)data;
+    perform_move(move->from, move->to);
+    gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
+    return TRUE;
+}
+
 static void update_moves() {
     gtk_container_foreach(GTK_CONTAINER(moves), (GtkCallback)gtk_widget_destroy, NULL);
 
     for (struct move *m = cur_node->child; m; m = m->next) {
         char *header = malloc(20);
         sprintf(header, "%c%d to %c%d",
-                'a'+X(m->from), 1+Y(m->from),
-                'a'+X(m->to), 1+Y(m->to));
+                'a'+X(m->from), 8-Y(m->from),
+                'a'+X(m->to), 8-Y(m->to));
         GtkLabel *head = GTK_LABEL(gtk_label_new(header));
+        GtkEventBox *headbox = GTK_EVENT_BOX(gtk_event_box_new());
+        gtk_container_add(GTK_CONTAINER(headbox), GTK_WIDGET(head));
         free(header);
 
         GtkLabel *txt = GTK_LABEL(gtk_label_new(m->desc));
+        GtkEventBox *txtbox = GTK_EVENT_BOX(gtk_event_box_new());
+        gtk_container_add(GTK_CONTAINER(txtbox), GTK_WIDGET(txt));
 
-        gtk_grid_attach_next_to(moves, GTK_WIDGET(head), NULL, GTK_POS_BOTTOM, 1, 1);
-        gtk_widget_show(GTK_WIDGET(head));
-        gtk_grid_attach_next_to(moves, GTK_WIDGET(txt), NULL, GTK_POS_BOTTOM, 1, 1);
-        gtk_widget_show(GTK_WIDGET(txt));
+        gtk_grid_attach_next_to(moves, GTK_WIDGET(headbox), NULL, GTK_POS_BOTTOM, 1, 1);
+        gtk_grid_attach_next_to(moves, GTK_WIDGET(txtbox), NULL, GTK_POS_BOTTOM, 1, 1);
+
+        g_signal_connect(headbox, "button_press_event", G_CALLBACK(move_clicked), m);
+        g_signal_connect(txtbox, "button_press_event", G_CALLBACK(move_clicked), m);
     }
+
+    gtk_widget_show_all(GTK_WIDGET(moves));
 }
 
 static void initialize_images() {
@@ -273,6 +289,37 @@ static void update_legal(int type, int color, int fx, int fy) {
     }
 }
 
+static void perform_move(int from, int to) {
+    hist = realloc(hist, ++nhist * sizeof *hist);
+    hist[nhist-1] = malloc(sizeof pieces);
+    memcpy(hist[nhist-1], pieces, sizeof pieces);
+
+    pieces[X(to)][Y(to)] = pieces[X(from)][Y(from)];
+    pieces[X(from)][Y(from)] = 0;
+
+    struct move *prev = NULL;
+    for (struct move *m = cur_node->child; m; prev = m, m = m->next) {
+        if (m->from == from && m->to == to) {
+            cur_node = m;
+            goto done;
+        }
+    }
+
+    struct move *new_move = new_node();
+    new_move->parent = cur_node;
+    new_move->from = from;
+    new_move->to = to;
+    new_move->desc = "this is a description";
+    if (prev) prev->next = new_move;
+    else cur_node->child = new_move;
+
+    cur_node = new_move;
+    save_db();
+
+done:
+    update_moves();
+}
+
 static gboolean mouse_pressed(GtkWidget *widget, GdkEventButton *event, gpointer data) {
     (void)widget; (void)data;
 
@@ -319,34 +366,7 @@ static gboolean mouse_released(GtkWidget *widget, GdkEventButton *event, gpointe
 
     if (clicked) {
         if (legal[hover_x][hover_y]) {
-            hist = realloc(hist, ++nhist * sizeof *hist);
-            hist[nhist-1] = malloc(sizeof pieces);
-            memcpy(hist[nhist-1], pieces, sizeof pieces);
-
-            pieces[hover_x][hover_y] = clicked;
-            pieces[click_x][click_y] = 0;
-
-            struct move *prev = NULL;
-            for (struct move *m = cur_node->child; m; prev = m, m = m->next) {
-                if (m->from == SQ(click_x, click_y) && m->to == SQ(hover_x, hover_y)) {
-                    cur_node = m;
-                    goto done;
-                }
-            }
-
-            struct move *new_move = new_node();
-            new_move->parent = cur_node;
-            new_move->from = SQ(click_x, click_y);
-            new_move->to = SQ(hover_x, hover_y);
-            new_move->desc = "this is a description";
-            if (prev) prev->next = new_move;
-            else cur_node->child = new_move;
-
-            cur_node = new_move;
-            done:
-
-            save_db();
-            update_moves();
+            perform_move(SQ(click_x, click_y), SQ(hover_x, hover_y));
         }
 
         clicked = 0;
