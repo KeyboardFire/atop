@@ -19,6 +19,7 @@
 #include "atop.h"
 
 #include <gtk/gtk.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -43,6 +44,7 @@ static GtkGrid *moves;
 
 static int click_x, click_y, hover_x, hover_y;
 static float offset_x, offset_y;
+static struct move *hover_move;
 
 static int pieces[8][8];
 static int legal[8][8];
@@ -160,9 +162,24 @@ static gboolean move_clicked(GtkWidget *widget, GdkEventButton *event, gpointer 
     if (event->button == 1) {
         struct move *move = (struct move*)data;
         perform_move(move->from, move->to);
+        hover_move = NULL;
         gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
         return TRUE;
     } else return FALSE;
+}
+
+static gboolean move_entered(GtkWidget *widget, GdkEventCrossing *event, gpointer data) {
+    (void)widget; (void)event;
+    hover_move = data;
+    gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
+    return TRUE;
+}
+
+static gboolean move_left(GtkWidget *widget, GdkEventCrossing *event, gpointer data) {
+    (void)widget; (void)event; (void)data;
+    hover_move = NULL;
+    gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
+    return TRUE;
 }
 
 static void update_moves() {
@@ -191,6 +208,8 @@ static void update_moves() {
         gtk_container_add(GTK_CONTAINER(box), GTK_WIDGET(container));
         gtk_grid_attach_next_to(moves, GTK_WIDGET(box), NULL, GTK_POS_BOTTOM, 1, 1);
         g_signal_connect(box, "button_press_event", G_CALLBACK(move_clicked), m);
+        g_signal_connect(box, "enter_notify_event", G_CALLBACK(move_entered), m);
+        g_signal_connect(box, "leave_notify_event", G_CALLBACK(move_left), NULL);
     }
 
     gtk_widget_show_all(GTK_WIDGET(moves));
@@ -425,6 +444,27 @@ static gboolean draw_board(GtkWidget *widget, cairo_t *cr, gpointer data) {
     if (clicked) {
         cairo_set_source_surface(cr, img_piece[NP+clicked], offset_x - 32, offset_y - 32);
         cairo_paint(cr);
+    }
+
+    // draw arrow indicating prospective move, if any
+    if (hover_move) {
+        int fx = X(hover_move->from)*64+32, fy = Y(hover_move->from)*64+32,
+            tx = X(hover_move->to)*64+32, ty = Y(hover_move->to)*64+32;
+        double angle = atan2(ty-fy, tx-fx);
+
+        // draw line
+        cairo_set_source_rgb(cr, 0.2, 0.2, 0.4);
+        cairo_set_line_width(cr, 5);
+        cairo_move_to(cr, fx, fy);
+        cairo_line_to(cr, tx, ty);
+        cairo_stroke(cr);
+
+        // draw arrowhead
+        double x = tx + 10*cos(angle), y = ty + 10*sin(angle);
+        cairo_move_to(cr, x, y);
+        cairo_line_to(cr, x - 30*cos(angle+0.3), y - 30*sin(angle+0.3));
+        cairo_line_to(cr, x - 30*cos(angle-0.3), y - 30*sin(angle-0.3));
+        cairo_fill(cr);
     }
 
     return FALSE;

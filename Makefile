@@ -12,7 +12,7 @@ bin/%.o: src/%.c $(wildcard src/*.h)
 
 $(TARGET): $(patsubst src/%.c, bin/%.o, $(wildcard src/*.c))
 	@mkdir -p bin
-	gcc $(FLAGS) -Wall -Wextra -Wpedantic `pkg-config --libs gtk+-3.0` $^ -o $@
+	gcc $(FLAGS) -Wall -Wextra -Wpedantic `pkg-config --libs gtk+-3.0` -lm $^ -o $@
 
 debug: FLAGS = -g -O0
 
