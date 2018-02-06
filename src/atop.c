@@ -171,14 +171,17 @@ static void save_edit(GtkTextView *text, struct move *move) {
     g_signal_handler_disconnect(text, focus_signal);
     gtk_widget_destroy(GTK_WIDGET(text));
 
-    GtkLabel *lbl = GTK_LABEL(gtk_label_new(desc));
-    ADD_CLASS(lbl, "desc");
-    gtk_label_set_line_wrap(lbl, TRUE);
-    gtk_label_set_xalign(lbl, 0);
-    gtk_grid_attach(grid, GTK_WIDGET(lbl), 0, 1, 1, 1);
-    gtk_widget_show(GTK_WIDGET(lbl));
+    if (move != cur_node) {
+        GtkLabel *lbl = GTK_LABEL(gtk_label_new(desc));
+        ADD_CLASS(lbl, "desc");
+        gtk_label_set_line_wrap(lbl, TRUE);
+        gtk_label_set_xalign(lbl, 0);
+        gtk_grid_attach(grid, GTK_WIDGET(lbl), 0, 1, 1, 1);
+        gtk_widget_show(GTK_WIDGET(lbl));
 
-    free(move->desc);
+        free(move->desc);
+    }
+
     move->desc = desc;
     save_db();
 }
@@ -197,6 +200,19 @@ static gboolean save_edit_key(GtkWidget *text, GdkEventKey *event, gpointer data
     return FALSE;
 }
 
+static GtkTextView* request_edit(struct move *move, GtkGrid *parent, int y) {
+    GtkTextView *text = GTK_TEXT_VIEW(gtk_text_view_new());
+    gtk_text_buffer_set_text(gtk_text_view_get_buffer(text), move->desc, -1);
+    gtk_text_view_set_wrap_mode(text, GTK_WRAP_WORD_CHAR);
+    gtk_grid_attach(parent, GTK_WIDGET(text), 0, y, 1, 1);
+    gtk_widget_set_size_request(GTK_WIDGET(text), 256, 0);
+    gtk_widget_show(GTK_WIDGET(text));
+    gtk_widget_grab_focus(GTK_WIDGET(text));
+    focus_signal = g_signal_connect(text, "focus_out_event", G_CALLBACK(save_edit_focus), move);
+    g_signal_connect(text, "key_press_event", G_CALLBACK(save_edit_key), move);
+    return text;
+}
+
 static gboolean edit_move(GtkWidget *widget, GdkEventButton *event, gpointer data) {
     (void)event;
     GtkGrid *grid = GTK_GRID(gtk_widget_get_ancestor(widget, GTK_TYPE_GRID));
@@ -205,15 +221,7 @@ static gboolean edit_move(GtkWidget *widget, GdkEventButton *event, gpointer dat
     gtk_widget_destroy(GTK_WIDGET(children->data));
     g_list_free(children);
 
-    GtkTextView *text = GTK_TEXT_VIEW(gtk_text_view_new());
-    gtk_text_buffer_set_text(gtk_text_view_get_buffer(text),
-            ((struct move*)data)->desc, -1);
-    gtk_text_view_set_wrap_mode(text, GTK_WRAP_WORD_CHAR);
-    gtk_grid_attach(grid, GTK_WIDGET(text), 0, 1, 1, 1);
-    gtk_widget_show(GTK_WIDGET(text));
-    gtk_widget_grab_focus(GTK_WIDGET(text));
-    focus_signal = g_signal_connect(text, "focus_out_event", G_CALLBACK(save_edit_focus), data);
-    g_signal_connect(text, "key_press_event", G_CALLBACK(save_edit_key), data);
+    request_edit(data, grid, 1);
 
     return TRUE;
 }
@@ -413,7 +421,8 @@ static void perform_move(int fx, int fy, int tx, int ty) {
     for (struct move *m = cur_node->child; m; prev = m, m = m->next) {
         if (m->from == SQ(fx, fy) && m->to == SQ(tx, ty)) {
             cur_node = m;
-            goto done;
+            update_moves();
+            return;
         }
     }
 
@@ -421,15 +430,15 @@ static void perform_move(int fx, int fy, int tx, int ty) {
     new_move->parent = cur_node;
     new_move->from = SQ(fx, fy);
     new_move->to = SQ(tx, ty);
-    new_move->desc = "this is a description sldk fs ls lwflew kewk jfds sd lwe lwlek fsl lsdl sdl lwe lkfwel jes fldf lwle flkwef ld ewlkf";
+    new_move->desc = "";
     if (prev) prev->next = new_move;
     else cur_node->child = new_move;
 
     cur_node = new_move;
     save_db();
 
-done:
     update_moves();
+    request_edit(new_move, moves, 0);
 }
 
 static gboolean mouse_pressed(GtkWidget *widget, GdkEventButton *event, gpointer data) {
