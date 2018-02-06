@@ -155,10 +155,12 @@ static void save_db() {
 static void perform_move(int from, int to);
 static gboolean move_clicked(GtkWidget *widget, GdkEventButton *event, gpointer data) {
     (void)widget; (void)event;
-    struct move *move = (struct move*)data;
-    perform_move(move->from, move->to);
-    gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
-    return TRUE;
+    if (event->button == 1) {
+        struct move *move = (struct move*)data;
+        perform_move(move->from, move->to);
+        gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
+        return TRUE;
+    } else return FALSE;
 }
 
 static void update_moves() {
