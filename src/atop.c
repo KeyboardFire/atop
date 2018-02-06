@@ -326,9 +326,22 @@ done:
 static gboolean mouse_pressed(GtkWidget *widget, GdkEventButton *event, gpointer data) {
     (void)widget; (void)data;
 
-    if (event->type != GDK_BUTTON_PRESS) return TRUE;
+    if (event->type == GDK_BUTTON_PRESS && event->button == 3 && nhist) {
+        memcpy(pieces, hist[--nhist], sizeof pieces);
+        free(hist[nhist]);
+        cur_node = cur_node->parent;
+        update_moves();
+        gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
+        return TRUE;
+    }
 
-    if (event->button == 1) {
+    return FALSE;
+}
+
+static gboolean board_pressed(GtkWidget *widget, GdkEventButton *event, gpointer data) {
+    (void)widget; (void)data;
+
+    if (event->type == GDK_BUTTON_PRESS && event->button == 1) {
         click_x = event->x / 64;
         click_y = event->y / 64;
         if (click_x < 8 && click_y < 8 && pieces[click_x][click_y] * (nhist%2*2-1) < 0) {
@@ -336,18 +349,13 @@ static gboolean mouse_pressed(GtkWidget *widget, GdkEventButton *event, gpointer
             update_legal(abs(clicked), (clicked > 0) - (clicked < 0), click_x, click_y);
             gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
         }
-    } else if (event->button == 3 && nhist) {
-        memcpy(pieces, hist[--nhist], sizeof pieces);
-        free(hist[nhist]);
-        cur_node = cur_node->parent;
-        update_moves();
-        gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
+        return TRUE;
     }
 
-    return TRUE;
+    return FALSE;
 }
 
-static gboolean mouse_moved(GtkWidget *widget, GdkEventMotion *event, gpointer data) {
+static gboolean board_moved(GtkWidget *widget, GdkEventMotion *event, gpointer data) {
     (void)widget; (void)data;
 
     hover_x = event->x / 64;
@@ -364,7 +372,7 @@ static gboolean mouse_moved(GtkWidget *widget, GdkEventMotion *event, gpointer d
     return TRUE;
 }
 
-static gboolean mouse_released(GtkWidget *widget, GdkEventButton *event, gpointer data) {
+static gboolean board_released(GtkWidget *widget, GdkEventButton *event, gpointer data) {
     (void)widget; (void)event; (void)data;
 
     if (clicked) {
@@ -462,18 +470,20 @@ void atop_init(int *argc, char ***argv) {
             GTK_STYLE_PROVIDER(provider),
             GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 
-    gtk_widget_add_events(GTK_WIDGET(win),
-            GDK_POINTER_MOTION_MASK |
-            GDK_BUTTON_RELEASE_MASK);
-
+    gtk_widget_add_events(GTK_WIDGET(win), GDK_BUTTON_PRESS_MASK);
     g_signal_connect(win, "destroy", G_CALLBACK(gtk_main_quit), NULL);
     g_signal_connect(win, "button_press_event", G_CALLBACK(mouse_pressed), NULL);
-    g_signal_connect(win, "motion_notify_event", G_CALLBACK(mouse_moved), NULL);
-    g_signal_connect(win, "button_release_event", G_CALLBACK(mouse_released), NULL);
 
     board = GTK_DRAWING_AREA(gtk_builder_get_object(builder, "board"));
     gtk_widget_set_size_request(GTK_WIDGET(board), 512, 512);
+    gtk_widget_add_events(GTK_WIDGET(board),
+            GDK_BUTTON_PRESS_MASK |
+            GDK_POINTER_MOTION_MASK |
+            GDK_BUTTON_RELEASE_MASK);
     g_signal_connect(board, "draw", G_CALLBACK(draw_board), NULL);
+    g_signal_connect(board, "button_press_event", G_CALLBACK(board_pressed), NULL);
+    g_signal_connect(board, "motion_notify_event", G_CALLBACK(board_moved), NULL);
+    g_signal_connect(board, "button_release_event", G_CALLBACK(board_released), NULL);
 
     moves = GTK_GRID(gtk_builder_get_object(builder, "moves"));
     gtk_widget_set_size_request(GTK_WIDGET(gtk_builder_get_object(builder, "scroll")), 256, 512);
