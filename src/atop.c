@@ -36,6 +36,8 @@
 #define X(sq) ((sq)/8)
 #define Y(sq) ((sq)%8)
 
+#define CLASS(x,k) gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(x)), (k))
+
 static GtkDrawingArea *board;
 static GtkGrid *moves;
 
@@ -173,16 +175,15 @@ static void update_moves() {
                 'a'+X(m->from), 8-Y(m->from),
                 'a'+X(m->to), 8-Y(m->to));
         GtkLabel *head = GTK_LABEL(gtk_label_new(header));
-        gtk_style_context_add_class(gtk_widget_get_style_context(head), "head");
-        if (pad) gtk_style_context_add_class(gtk_widget_get_style_context(head), "pad");
-        pad = 1;
+        CLASS(head, "head");
+        if (pad) CLASS(head, "pad"); pad = 1;
         GtkEventBox *headbox = GTK_EVENT_BOX(gtk_event_box_new());
         gtk_widget_set_size_request(GTK_WIDGET(headbox), 256, 0);
         gtk_container_add(GTK_CONTAINER(headbox), GTK_WIDGET(head));
         free(header);
 
         GtkLabel *txt = GTK_LABEL(gtk_label_new(m->desc));
-        gtk_style_context_add_class(gtk_widget_get_style_context(txt), "desc");
+        CLASS(txt, "desc");
         gtk_label_set_line_wrap(txt, TRUE);
         gtk_label_set_xalign(txt, 0);
         GtkEventBox *txtbox = GTK_EVENT_BOX(gtk_event_box_new());
