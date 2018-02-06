@@ -157,12 +157,12 @@ static void save_db() {
     fclose(f);
 }
 
-static void perform_move(int from, int to);
+static void perform_move(int fx, int fy, int tx, int ty);
 static gboolean move_clicked(GtkWidget *widget, GdkEventButton *event, gpointer data) {
     (void)widget; (void)event;
     if (event->button == 1) {
         struct move *move = (struct move*)data;
-        perform_move(move->from, move->to);
+        perform_move(X(move->from), Y(move->from), X(move->to), Y(move->to));
         hover_move = NULL;
         gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
         return TRUE;
@@ -311,17 +311,27 @@ static void update_legal(int type, int color, int fx, int fy) {
     }
 }
 
-static void perform_move(int from, int to) {
+static void perform_move(int fx, int fy, int tx, int ty) {
     hist = realloc(hist, ++nhist * sizeof *hist);
     hist[nhist-1] = malloc(sizeof pieces);
     memcpy(hist[nhist-1], pieces, sizeof pieces);
 
-    pieces[X(to)][Y(to)] = pieces[X(from)][Y(from)];
-    pieces[X(from)][Y(from)] = 0;
+    if (pieces[tx][ty]) {
+        pieces[tx][ty] = 0;
+        if (tx-1 >= 0 && ty-1 >= 0 && abs(pieces[tx-1][ty-1]) != 1) pieces[tx-1][ty-1] = 0;
+        if (tx-1 >= 0              && abs(pieces[tx-1][ty])   != 1) pieces[tx-1][ty]   = 0;
+        if (tx-1 >= 0 && ty+1 <  8 && abs(pieces[tx-1][ty+1]) != 1) pieces[tx-1][ty+1] = 0;
+        if (             ty-1 >= 0 && abs(pieces[tx][ty-1])   != 1) pieces[tx][ty-1]   = 0;
+        if (             ty+1 <  8 && abs(pieces[tx][ty+1])   != 1) pieces[tx][ty+1]   = 0;
+        if (tx+1 <  8 && ty-1 >= 0 && abs(pieces[tx+1][ty-1]) != 1) pieces[tx+1][ty-1] = 0;
+        if (tx+1 <  8              && abs(pieces[tx+1][ty])   != 1) pieces[tx+1][ty]   = 0;
+        if (tx+1 <  8 && ty+1 <  8 && abs(pieces[tx+1][ty+1]) != 1) pieces[tx+1][ty+1] = 0;
+    } else pieces[tx][ty] = pieces[fx][fy];
+    pieces[fx][fy] = 0;
 
     struct move *prev = NULL;
     for (struct move *m = cur_node->child; m; prev = m, m = m->next) {
-        if (m->from == from && m->to == to) {
+        if (m->from == SQ(fx, fy) && m->to == SQ(tx, ty)) {
             cur_node = m;
             goto done;
         }
@@ -329,8 +339,8 @@ static void perform_move(int from, int to) {
 
     struct move *new_move = new_node();
     new_move->parent = cur_node;
-    new_move->from = from;
-    new_move->to = to;
+    new_move->from = SQ(fx, fy);
+    new_move->to = SQ(tx, ty);
     new_move->desc = "this is a description sldk fs ls lwflew kewk jfds sd lwe lwlek fsl lsdl sdl lwe lkfwel jes fldf lwle flkwef ld ewlkf";
     if (prev) prev->next = new_move;
     else cur_node->child = new_move;
@@ -396,7 +406,7 @@ static gboolean board_released(GtkWidget *widget, GdkEventButton *event, gpointe
 
     if (clicked) {
         if (legal[hover_x][hover_y]) {
-            perform_move(SQ(click_x, click_y), SQ(hover_x, hover_y));
+            perform_move(click_x, click_y, hover_x, hover_y);
         }
 
         clicked = 0;
