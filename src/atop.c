@@ -168,32 +168,29 @@ static gboolean move_clicked(GtkWidget *widget, GdkEventButton *event, gpointer 
 static void update_moves() {
     gtk_container_foreach(GTK_CONTAINER(moves), (GtkCallback)gtk_widget_destroy, NULL);
 
-    int pad = 0;
     for (struct move *m = cur_node->child; m; m = m->next) {
+        GtkGrid *container = GTK_GRID(gtk_grid_new());
+
         char *header = malloc(20);
         sprintf(header, "%c%d to %c%d",
                 'a'+X(m->from), 8-Y(m->from),
                 'a'+X(m->to), 8-Y(m->to));
         GtkLabel *head = GTK_LABEL(gtk_label_new(header));
+        gtk_widget_set_size_request(GTK_WIDGET(head), 256, 0);
         CLASS(head, "head");
-        if (pad) CLASS(head, "pad"); pad = 1;
-        GtkEventBox *headbox = GTK_EVENT_BOX(gtk_event_box_new());
-        gtk_widget_set_size_request(GTK_WIDGET(headbox), 256, 0);
-        gtk_container_add(GTK_CONTAINER(headbox), GTK_WIDGET(head));
+        gtk_grid_attach(container, GTK_WIDGET(head), 0, 0, 1, 1);
         free(header);
 
         GtkLabel *txt = GTK_LABEL(gtk_label_new(m->desc));
         CLASS(txt, "desc");
         gtk_label_set_line_wrap(txt, TRUE);
         gtk_label_set_xalign(txt, 0);
-        GtkEventBox *txtbox = GTK_EVENT_BOX(gtk_event_box_new());
-        gtk_container_add(GTK_CONTAINER(txtbox), GTK_WIDGET(txt));
+        gtk_grid_attach(container, GTK_WIDGET(txt), 0, 1, 1, 1);
 
-        gtk_grid_attach_next_to(moves, GTK_WIDGET(headbox), NULL, GTK_POS_BOTTOM, 1, 1);
-        gtk_grid_attach_next_to(moves, GTK_WIDGET(txtbox), NULL, GTK_POS_BOTTOM, 1, 1);
-
-        g_signal_connect(headbox, "button_press_event", G_CALLBACK(move_clicked), m);
-        g_signal_connect(txtbox, "button_press_event", G_CALLBACK(move_clicked), m);
+        GtkEventBox *box = GTK_EVENT_BOX(gtk_event_box_new());
+        gtk_container_add(GTK_CONTAINER(box), GTK_WIDGET(container));
+        gtk_grid_attach_next_to(moves, GTK_WIDGET(box), NULL, GTK_POS_BOTTOM, 1, 1);
+        g_signal_connect(box, "button_press_event", G_CALLBACK(move_clicked), m);
     }
 
     gtk_widget_show_all(GTK_WIDGET(moves));
@@ -486,6 +483,7 @@ void atop_init(int *argc, char ***argv) {
     g_signal_connect(board, "button_release_event", G_CALLBACK(board_released), NULL);
 
     moves = GTK_GRID(gtk_builder_get_object(builder, "moves"));
+    gtk_grid_set_row_spacing(moves, 20);
     gtk_widget_set_size_request(GTK_WIDGET(gtk_builder_get_object(builder, "scroll")), 256, 512);
     initialize_db();
     update_moves();
