@@ -51,6 +51,8 @@ static int pieces[8][8];
 static int legal[8][8];
 static int clicked;
 
+gulong focus_signal;
+
 static int **hist;
 int nhist;
 
@@ -157,6 +159,65 @@ static void save_db() {
     fclose(f);
 }
 
+static void save_edit(GtkTextView *text, struct move *move) {
+    GtkGrid *grid = GTK_GRID(gtk_widget_get_ancestor(GTK_WIDGET(text), GTK_TYPE_GRID));
+
+    GtkTextBuffer *buf = gtk_text_view_get_buffer(text);
+    GtkTextIter start, end;
+    gtk_text_buffer_get_start_iter(buf, &start);
+    gtk_text_buffer_get_end_iter(buf, &end);
+    gchar *desc = gtk_text_buffer_get_text(buf, &start, &end, TRUE);
+
+    g_signal_handler_disconnect(text, focus_signal);
+    gtk_widget_destroy(GTK_WIDGET(text));
+
+    GtkLabel *lbl = GTK_LABEL(gtk_label_new(desc));
+    ADD_CLASS(lbl, "desc");
+    gtk_label_set_line_wrap(lbl, TRUE);
+    gtk_label_set_xalign(lbl, 0);
+    gtk_grid_attach(grid, GTK_WIDGET(lbl), 0, 1, 1, 1);
+    gtk_widget_show(GTK_WIDGET(lbl));
+
+    free(move->desc);
+    move->desc = desc;
+    save_db();
+}
+
+static gboolean save_edit_focus(GtkWidget *text, GdkEventFocus *event, gpointer data) {
+    (void)event;
+    save_edit(GTK_TEXT_VIEW(text), data);
+    return TRUE;
+}
+
+static gboolean save_edit_key(GtkWidget *text, GdkEventKey *event, gpointer data) {
+    if (event->keyval == GDK_KEY_Return) {
+        save_edit(GTK_TEXT_VIEW(text), data);
+        return TRUE;
+    }
+    return FALSE;
+}
+
+static gboolean edit_move(GtkWidget *widget, GdkEventButton *event, gpointer data) {
+    (void)event;
+    GtkGrid *grid = GTK_GRID(gtk_widget_get_ancestor(widget, GTK_TYPE_GRID));
+
+    GList *children = gtk_container_get_children(GTK_CONTAINER(grid));
+    gtk_widget_destroy(GTK_WIDGET(children->data));
+    g_list_free(children);
+
+    GtkTextView *text = GTK_TEXT_VIEW(gtk_text_view_new());
+    gtk_text_buffer_set_text(gtk_text_view_get_buffer(text),
+            ((struct move*)data)->desc, -1);
+    gtk_text_view_set_wrap_mode(text, GTK_WRAP_WORD_CHAR);
+    gtk_grid_attach(grid, GTK_WIDGET(text), 0, 1, 1, 1);
+    gtk_widget_show(GTK_WIDGET(text));
+    gtk_widget_grab_focus(GTK_WIDGET(text));
+    focus_signal = g_signal_connect(text, "focus_out_event", G_CALLBACK(save_edit_focus), data);
+    g_signal_connect(text, "key_press_event", G_CALLBACK(save_edit_key), data);
+
+    return TRUE;
+}
+
 static void perform_move(int fx, int fy, int tx, int ty);
 static gboolean move_clicked(GtkWidget *widget, GdkEventButton *event, gpointer data) {
     (void)widget; (void)event;
@@ -202,13 +263,23 @@ static void update_moves() {
 
     for (struct move *m = cur_node->child; m; m = m->next) {
         GtkGrid *container = GTK_GRID(gtk_grid_new());
+        GtkOverlay *overlay = GTK_OVERLAY(gtk_overlay_new());
 
         char *header = algebraic(X(m->from), Y(m->from), X(m->to), Y(m->to));
         GtkLabel *head = GTK_LABEL(gtk_label_new(header));
         gtk_widget_set_size_request(GTK_WIDGET(head), 256, 0);
         ADD_CLASS(head, "head");
-        gtk_grid_attach(container, GTK_WIDGET(head), 0, 0, 1, 1);
         free(header);
+
+        GtkEventBox *btn = GTK_EVENT_BOX(gtk_event_box_new());
+        ADD_CLASS(btn, "editbtn");
+        gtk_container_add(GTK_CONTAINER(btn), gtk_image_new_from_file("img/edit.png"));
+        gtk_widget_set_halign(GTK_WIDGET(btn), GTK_ALIGN_END);
+        g_signal_connect(btn, "button_press_event", G_CALLBACK(edit_move), m);
+
+        gtk_container_add(GTK_CONTAINER(overlay), GTK_WIDGET(head));
+        gtk_overlay_add_overlay(overlay, GTK_WIDGET(btn));
+        gtk_grid_attach(container, GTK_WIDGET(overlay), 0, 0, 1, 1);
 
         GtkLabel *txt = GTK_LABEL(gtk_label_new(m->desc));
         ADD_CLASS(txt, "desc");

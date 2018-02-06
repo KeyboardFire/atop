@@ -13,6 +13,6 @@ label.head {
     color: #f82828;
 }
 
-label.desc {
+label.desc, .editbtn image {
     padding: 0 0.4em;
 }
