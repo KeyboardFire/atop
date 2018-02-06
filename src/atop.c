@@ -98,10 +98,9 @@ static void initialize_db() {
                     else goto done;
                 } else {
                     struct move *new = new_node();
-                    new->parent = cur;
                     new->from = buf[idx];
-                    if (child) cur->child = new, cur = new;
-                    else cur->next = new, cur = new;
+                    if (child) new->parent = cur, cur->child = new, cur = new;
+                    else new->parent = cur->parent, cur->next = new, cur = new;
                     state = PENDING_TO;
                 }
                 ++idx;
