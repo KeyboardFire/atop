@@ -185,16 +185,25 @@ static gboolean move_left(GtkWidget *widget, GdkEventCrossing *event, gpointer d
     return TRUE;
 }
 
+static char* algebraic(int fx, int fy, int tx, int ty) {
+    char *buf = malloc(10);
+    int idx = 0;
+    int type = abs(pieces[fx][fy]);
+    if (type != 1) buf[idx++] = "  NBRQK"[type];
+    if (pieces[tx][ty]) buf[idx++] = 'x';
+    buf[idx++] = 'a' + tx;
+    buf[idx++] = '8' - ty;
+    buf[idx] = '\0';
+    return buf;
+}
+
 static void update_moves() {
     gtk_container_foreach(GTK_CONTAINER(moves), (GtkCallback)gtk_widget_destroy, NULL);
 
     for (struct move *m = cur_node->child; m; m = m->next) {
         GtkGrid *container = GTK_GRID(gtk_grid_new());
 
-        char *header = malloc(20);
-        sprintf(header, "%c%d to %c%d",
-                'a'+X(m->from), 8-Y(m->from),
-                'a'+X(m->to), 8-Y(m->to));
+        char *header = algebraic(X(m->from), Y(m->from), X(m->to), Y(m->to));
         GtkLabel *head = GTK_LABEL(gtk_label_new(header));
         gtk_widget_set_size_request(GTK_WIDGET(head), 256, 0);
         ADD_CLASS(head, "head");
@@ -535,14 +544,14 @@ void atop_init(int *argc, char ***argv) {
     g_signal_connect(board, "motion_notify_event", G_CALLBACK(board_moved), NULL);
     g_signal_connect(board, "button_release_event", G_CALLBACK(board_released), NULL);
 
+    initialize_db();
+    initialize_images();
+    initialize_pieces();
+
     moves = GTK_GRID(gtk_builder_get_object(builder, "moves"));
     gtk_grid_set_row_spacing(moves, 20);
     gtk_widget_set_size_request(GTK_WIDGET(gtk_builder_get_object(builder, "scroll")), 256, 512);
-    initialize_db();
     update_moves();
-
-    initialize_images();
-    initialize_pieces();
 
     gtk_widget_show_all(GTK_WIDGET(win));
 
