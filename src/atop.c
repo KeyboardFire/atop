@@ -116,11 +116,11 @@ static void initialize_db() {
                 break;
             case READING_DESC: {
                 size_t max = nread - idx,
-                       len = strnlen(buf + idx, max),
+                       len = strnlen((const char*)buf + idx, max),
                        prevlen = cur->desc ? strlen(cur->desc) : 0;
 
                 cur->desc = realloc(cur->desc, prevlen + len + 1);
-                strncpy(cur->desc + prevlen, buf + idx, len);
+                strncpy(cur->desc + prevlen, (const char*)buf + idx, len);
                 cur->desc[prevlen + len] = '\0';
 
                 idx += len;
