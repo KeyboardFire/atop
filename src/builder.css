@@ -1,0 +1,18 @@
+* {
+    color: #d8d8d8;
+    background: #182838;
+}
+
+label.head {
+    background: #283868;
+    font-weight: bold;
+    padding: 0.2em 0;
+}
+
+label.pad {
+    margin-top: 1em;
+}
+
+label.desc {
+    padding: 0 0.4em;
+}

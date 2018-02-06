@@ -153,13 +153,6 @@ static void save_db() {
     fclose(f);
 }
 
-static void apply_css(GtkWidget *widget, GtkStyleProvider *provider) {
-    gtk_style_context_add_provider(gtk_widget_get_style_context(widget), provider, G_MAXUINT);
-    if (GTK_IS_CONTAINER(widget)) {
-        gtk_container_forall(GTK_CONTAINER(widget), (GtkCallback)apply_css, provider);
-    }
-}
-
 static void perform_move(int from, int to);
 static gboolean move_clicked(GtkWidget *widget, GdkEventButton *event, gpointer data) {
     (void)widget; (void)event;
@@ -172,18 +165,23 @@ static gboolean move_clicked(GtkWidget *widget, GdkEventButton *event, gpointer 
 static void update_moves() {
     gtk_container_foreach(GTK_CONTAINER(moves), (GtkCallback)gtk_widget_destroy, NULL);
 
+    int pad = 0;
     for (struct move *m = cur_node->child; m; m = m->next) {
         char *header = malloc(20);
         sprintf(header, "%c%d to %c%d",
                 'a'+X(m->from), 8-Y(m->from),
                 'a'+X(m->to), 8-Y(m->to));
         GtkLabel *head = GTK_LABEL(gtk_label_new(header));
-        gtk_label_set_xalign(head, 0);
+        gtk_style_context_add_class(gtk_widget_get_style_context(head), "head");
+        if (pad) gtk_style_context_add_class(gtk_widget_get_style_context(head), "pad");
+        pad = 1;
         GtkEventBox *headbox = GTK_EVENT_BOX(gtk_event_box_new());
+        gtk_widget_set_size_request(GTK_WIDGET(headbox), 256, 0);
         gtk_container_add(GTK_CONTAINER(headbox), GTK_WIDGET(head));
         free(header);
 
         GtkLabel *txt = GTK_LABEL(gtk_label_new(m->desc));
+        gtk_style_context_add_class(gtk_widget_get_style_context(txt), "desc");
         gtk_label_set_line_wrap(txt, TRUE);
         gtk_label_set_xalign(txt, 0);
         GtkEventBox *txtbox = GTK_EVENT_BOX(gtk_event_box_new());
@@ -409,7 +407,7 @@ static gboolean draw_board(GtkWidget *widget, cairo_t *cr, gpointer data) {
 
             // draw indicator if we can move here
             if (legal[i][j]) {
-                cairo_set_source_rgb(cr, 0.2, 0.6, 0.1);
+                cairo_set_source_rgb(cr, 0.2, 0.2, 0.4);
                 cairo_arc(cr, i*64+32, j*64+32, 30, 0, 2*M_PI);
                 cairo_stroke(cr);
             }
@@ -456,7 +454,10 @@ void atop_init(int *argc, char ***argv) {
 
     GtkCssProvider *provider = gtk_css_provider_new();
     gtk_css_provider_load_from_path(provider, "src/builder.css", NULL);
-    apply_css(GTK_WIDGET(win), GTK_STYLE_PROVIDER(provider));
+    gtk_style_context_add_provider_for_screen(
+            gdk_display_get_default_screen(gdk_display_get_default()),
+            GTK_STYLE_PROVIDER(provider),
+            GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 
     gtk_widget_add_events(GTK_WIDGET(win),
             GDK_POINTER_MOTION_MASK |
