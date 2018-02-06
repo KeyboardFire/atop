@@ -160,8 +160,6 @@ static void save_db() {
 }
 
 static void save_edit(GtkTextView *text, struct move *move) {
-    GtkGrid *grid = GTK_GRID(gtk_widget_get_ancestor(GTK_WIDGET(text), GTK_TYPE_GRID));
-
     GtkTextBuffer *buf = gtk_text_view_get_buffer(text);
     GtkTextIter start, end;
     gtk_text_buffer_get_start_iter(buf, &start);
@@ -171,17 +169,17 @@ static void save_edit(GtkTextView *text, struct move *move) {
     g_signal_handler_disconnect(text, focus_signal);
     gtk_widget_destroy(GTK_WIDGET(text));
 
-    if (move != cur_node) {
+    if (move->parent == cur_node->parent) {
+        GtkGrid *grid = GTK_GRID(gtk_widget_get_ancestor(GTK_WIDGET(text), GTK_TYPE_GRID));
         GtkLabel *lbl = GTK_LABEL(gtk_label_new(desc));
         ADD_CLASS(lbl, "desc");
         gtk_label_set_line_wrap(lbl, TRUE);
         gtk_label_set_xalign(lbl, 0);
         gtk_grid_attach(grid, GTK_WIDGET(lbl), 0, 1, 1, 1);
         gtk_widget_show(GTK_WIDGET(lbl));
-
-        free(move->desc);
     }
 
+    free(move->desc);
     move->desc = desc;
     save_db();
 }
@@ -430,7 +428,7 @@ static void perform_move(int fx, int fy, int tx, int ty) {
     new_move->parent = cur_node;
     new_move->from = SQ(fx, fy);
     new_move->to = SQ(tx, ty);
-    new_move->desc = "";
+    new_move->desc = calloc(1, 1);
     if (prev) prev->next = new_move;
     else cur_node->child = new_move;
 
