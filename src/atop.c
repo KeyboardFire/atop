@@ -453,6 +453,7 @@ void atop_init(int *argc, char ***argv) {
     GtkBuilder *builder = gtk_builder_new();
     gtk_builder_add_from_file(builder, "src/builder.ui", NULL);
     GObject *win = gtk_builder_get_object(builder, "window");
+    gtk_window_set_type_hint(GTK_WINDOW(win), GDK_WINDOW_TYPE_HINT_DIALOG);
 
     GtkCssProvider *provider = gtk_css_provider_new();
     gtk_css_provider_load_from_path(provider, "src/builder.css", NULL);
