@@ -37,7 +37,8 @@
 #define X(sq) ((sq)/8)
 #define Y(sq) ((sq)%8)
 
-#define CLASS(x,k) gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(x)), (k))
+#define ADD_CLASS(x,k) gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(x)), (k))
+#define DEL_CLASS(x,k) gtk_style_context_remove_class(gtk_widget_get_style_context(GTK_WIDGET(x)), (k))
 
 static GtkDrawingArea *board;
 static GtkGrid *moves;
@@ -169,15 +170,17 @@ static gboolean move_clicked(GtkWidget *widget, GdkEventButton *event, gpointer 
 }
 
 static gboolean move_entered(GtkWidget *widget, GdkEventCrossing *event, gpointer data) {
-    (void)widget; (void)event;
+    (void)event;
     hover_move = data;
+    ADD_CLASS(widget, "hover");
     gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
     return TRUE;
 }
 
 static gboolean move_left(GtkWidget *widget, GdkEventCrossing *event, gpointer data) {
-    (void)widget; (void)event; (void)data;
+    (void)event; (void)data;
     hover_move = NULL;
+    DEL_CLASS(widget, "hover");
     gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
     return TRUE;
 }
@@ -194,12 +197,12 @@ static void update_moves() {
                 'a'+X(m->to), 8-Y(m->to));
         GtkLabel *head = GTK_LABEL(gtk_label_new(header));
         gtk_widget_set_size_request(GTK_WIDGET(head), 256, 0);
-        CLASS(head, "head");
+        ADD_CLASS(head, "head");
         gtk_grid_attach(container, GTK_WIDGET(head), 0, 0, 1, 1);
         free(header);
 
         GtkLabel *txt = GTK_LABEL(gtk_label_new(m->desc));
-        CLASS(txt, "desc");
+        ADD_CLASS(txt, "desc");
         gtk_label_set_line_wrap(txt, TRUE);
         gtk_label_set_xalign(txt, 0);
         gtk_grid_attach(container, GTK_WIDGET(txt), 0, 1, 1, 1);

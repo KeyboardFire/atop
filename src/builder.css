@@ -9,6 +9,10 @@ label.head {
     padding: 0.2em 0;
 }
 
+.hover label.head {
+    color: #f82828;
+}
+
 label.desc {
     padding: 0 0.4em;
 }
