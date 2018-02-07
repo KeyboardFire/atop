@@ -211,13 +211,8 @@ static void request_edit(struct move *move, GtkGrid *parent, int y) {
 static gboolean edit(GtkWidget *widget, GdkEventButton *event, gpointer data) {
     (void)event;
     GtkGrid *grid = GTK_GRID(gtk_widget_get_ancestor(widget, GTK_TYPE_GRID));
-
-    GList *children = gtk_container_get_children(GTK_CONTAINER(grid));
-    gtk_widget_destroy(GTK_WIDGET(children->data));
-    g_list_free(children);
-
+    gtk_grid_remove_row(grid, 1);
     request_edit(data, grid, 1);
-
     return TRUE;
 }
 
