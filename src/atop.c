@@ -253,6 +253,10 @@ static gboolean edit(GtkWidget *widget, GdkEventButton *event, gpointer data) {
     return TRUE;
 }
 
+void redraw() {
+    gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
+}
+
 // the following three functions pertain to the move list in the sidebar
 
 static void perform_move(int fx, int fy, int tx, int ty);
@@ -262,7 +266,7 @@ static gboolean move_clicked(GtkWidget *widget, GdkEventButton *event, gpointer 
         struct move *move = (struct move*)data;
         perform_move(X(move->from), Y(move->from), X(move->to), Y(move->to));
         hover_move = NULL;
-        gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
+        redraw();
         return TRUE;
     } else return FALSE;
 }
@@ -271,7 +275,7 @@ static gboolean move_entered(GtkWidget *widget, GdkEventCrossing *event, gpointe
     (void)event;
     hover_move = data;
     ADD_CLASS(widget, "hover");
-    gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
+    redraw();
     return TRUE;
 }
 
@@ -279,7 +283,7 @@ static gboolean move_left(GtkWidget *widget, GdkEventCrossing *event, gpointer d
     (void)event; (void)data;
     hover_move = NULL;
     DEL_CLASS(widget, "hover");
-    gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
+    redraw();
     return TRUE;
 }
 
@@ -502,8 +506,9 @@ static gboolean mouse_pressed(GtkWidget *widget, GdkEventButton *event, gpointer
         // update our position in the database
         cur_node = cur_node->parent;
 
+        hover_move = NULL;
         update_moves();
-        gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
+        redraw();
 
         return TRUE;
     }
@@ -522,7 +527,7 @@ static gboolean board_pressed(GtkWidget *widget, GdkEventButton *event, gpointer
         if (click_x < 8 && click_y < 8 && pieces[click_x][click_y] * (nhist%2*2-1) < 0) {
             clicked = pieces[click_x][click_y];
             update_legal(abs(clicked), (clicked > 0) - (clicked < 0), click_x, click_y);
-            gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
+            redraw();
         }
         return TRUE;
     }
@@ -542,7 +547,7 @@ static gboolean board_moved(GtkWidget *widget, GdkEventMotion *event, gpointer d
     offset_x = event->x;
     offset_y = event->y;
 
-    gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
+    redraw();
 
     return TRUE;
 }
@@ -563,7 +568,7 @@ static gboolean board_released(GtkWidget *widget, GdkEventButton *event, gpointe
         }
     }
 
-    gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
+    redraw();
 
     return TRUE;
 }
