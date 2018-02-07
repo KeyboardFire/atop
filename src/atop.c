@@ -162,16 +162,22 @@ static void save_db() {
 }
 
 static void save_edit() {
+    if (!edit_text) return;
+
+    // obtain the text entered by the user
+    // (this is soooo unnecessarily verbose)
     GtkTextBuffer *buf = gtk_text_view_get_buffer(edit_text);
     GtkTextIter start, end;
     gtk_text_buffer_get_start_iter(buf, &start);
     gtk_text_buffer_get_end_iter(buf, &end);
     gchar *desc = gtk_text_buffer_get_text(buf, &start, &end, TRUE);
 
+    // remove the text view (we might need the grid ancestor later)
     GtkGrid *grid = GTK_GRID(gtk_widget_get_ancestor(GTK_WIDGET(edit_text), GTK_TYPE_GRID));
     gtk_widget_destroy(GTK_WIDGET(edit_text));
 
     if (edit_replace) {
+        // replace the text view with a label if applicable
         GtkLabel *lbl = GTK_LABEL(gtk_label_new(desc));
         ADD_CLASS(lbl, "desc");
         gtk_label_set_line_wrap(lbl, TRUE);
@@ -180,9 +186,14 @@ static void save_edit() {
         gtk_widget_show(GTK_WIDGET(lbl));
     }
 
+    // update in the database
     free(edit_move->desc);
     edit_move->desc = desc;
     save_db();
+
+    // reset global state (setting edit_move to NULL isn't really necessary
+    // because no other code cares about it)
+    edit_text = NULL;
 }
 
 static gboolean save_edit_key(GtkWidget *widget, GdkEventKey *event, gpointer data) {
@@ -195,6 +206,7 @@ static gboolean save_edit_key(GtkWidget *widget, GdkEventKey *event, gpointer da
 }
 
 static void request_edit(struct move *move, GtkGrid *parent, int y) {
+    // add the text view in the appropriate location
     edit_text = GTK_TEXT_VIEW(gtk_text_view_new());
     gtk_text_buffer_set_text(gtk_text_view_get_buffer(edit_text), move->desc, -1);
     gtk_text_view_set_wrap_mode(edit_text, GTK_WRAP_WORD_CHAR);
@@ -203,6 +215,7 @@ static void request_edit(struct move *move, GtkGrid *parent, int y) {
     gtk_widget_show(GTK_WIDGET(edit_text));
     gtk_widget_grab_focus(GTK_WIDGET(edit_text));
 
+    // set up global state to finalize the edit when done
     edit_move = move;
     edit_replace = y;
     g_signal_connect(edit_text, "key_press_event", G_CALLBACK(save_edit_key), NULL);
@@ -210,9 +223,16 @@ static void request_edit(struct move *move, GtkGrid *parent, int y) {
 
 static gboolean edit(GtkWidget *widget, GdkEventButton *event, gpointer data) {
     (void)event;
+
+    // save any other edit in progress before starting a new one
+    save_edit();
+
+    // remove the label, to be replaced with a text view
     GtkGrid *grid = GTK_GRID(gtk_widget_get_ancestor(widget, GTK_TYPE_GRID));
     gtk_grid_remove_row(grid, 1);
+
     request_edit(data, grid, 1);
+
     return TRUE;
 }
 
@@ -390,6 +410,10 @@ static void update_legal(int type, int color, int fx, int fy) {
 }
 
 static void perform_move(int fx, int fy, int tx, int ty) {
+    // save any edit of a description currently in progress because the move
+    // being edited is about to get removed from the sidebar
+    save_edit();
+
     hist = realloc(hist, ++nhist * sizeof *hist);
     hist[nhist-1] = malloc(sizeof pieces);
     memcpy(hist[nhist-1], pieces, sizeof pieces);
@@ -435,11 +459,20 @@ static gboolean mouse_pressed(GtkWidget *widget, GdkEventButton *event, gpointer
     (void)widget; (void)data;
 
     if (event->type == GDK_BUTTON_PRESS && event->button == 3 && nhist) {
+        // save any description edit currently in progress, since we're
+        // navigating away
+        save_edit();
+
+        // pop from stack
         memcpy(pieces, hist[--nhist], sizeof pieces);
         free(hist[nhist]);
+
+        // update our position in the database
         cur_node = cur_node->parent;
+
         update_moves();
         gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
+
         return TRUE;
     }
 
