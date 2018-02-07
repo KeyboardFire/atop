@@ -288,7 +288,9 @@ static char* algebraic(int fx, int fy, int tx, int ty) {
     char *buf = malloc(10);
     int idx = 0;
     int type = abs(pieces[fx][fy]);
-    if (type != 1) buf[idx++] = "  NBRQK"[type];
+    if (type == 1) {
+        if (pieces[tx][ty]) buf[idx++] = 'a' + fx;
+    } else buf[idx++] = "  NBRQK"[type];
     if (pieces[tx][ty]) buf[idx++] = 'x';
     buf[idx++] = 'a' + tx;
     buf[idx++] = '8' - ty;
