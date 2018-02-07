@@ -51,8 +51,6 @@ static int pieces[8][8];
 static int legal[8][8];
 static int clicked;
 
-gulong focus_signal;
-
 static int **hist;
 int nhist;
 
@@ -159,17 +157,16 @@ static void save_db() {
     fclose(f);
 }
 
-static void save_edit(GtkTextView *text, struct move *move) {
+static void save_edit(GtkTextView *text, struct move *move, int replace_label) {
     GtkTextBuffer *buf = gtk_text_view_get_buffer(text);
     GtkTextIter start, end;
     gtk_text_buffer_get_start_iter(buf, &start);
     gtk_text_buffer_get_end_iter(buf, &end);
     gchar *desc = gtk_text_buffer_get_text(buf, &start, &end, TRUE);
 
-    g_signal_handler_disconnect(text, focus_signal);
     gtk_widget_destroy(GTK_WIDGET(text));
 
-    if (move->parent == cur_node->parent) {
+    if (replace_label) {
         GtkGrid *grid = GTK_GRID(gtk_widget_get_ancestor(GTK_WIDGET(text), GTK_TYPE_GRID));
         GtkLabel *lbl = GTK_LABEL(gtk_label_new(desc));
         ADD_CLASS(lbl, "desc");
@@ -184,15 +181,9 @@ static void save_edit(GtkTextView *text, struct move *move) {
     save_db();
 }
 
-static gboolean save_edit_focus(GtkWidget *text, GdkEventFocus *event, gpointer data) {
-    (void)event;
-    save_edit(GTK_TEXT_VIEW(text), data);
-    return TRUE;
-}
-
 static gboolean save_edit_key(GtkWidget *text, GdkEventKey *event, gpointer data) {
     if (event->keyval == GDK_KEY_Return) {
-        save_edit(GTK_TEXT_VIEW(text), data);
+        save_edit(GTK_TEXT_VIEW(text), data, 1);
         return TRUE;
     }
     return FALSE;
@@ -206,7 +197,6 @@ static GtkTextView* request_edit(struct move *move, GtkGrid *parent, int y) {
     gtk_widget_set_size_request(GTK_WIDGET(text), 256, 0);
     gtk_widget_show(GTK_WIDGET(text));
     gtk_widget_grab_focus(GTK_WIDGET(text));
-    focus_signal = g_signal_connect(text, "focus_out_event", G_CALLBACK(save_edit_focus), move);
     g_signal_connect(text, "key_press_event", G_CALLBACK(save_edit_key), move);
     return text;
 }
