@@ -164,10 +164,10 @@ static void save_edit(GtkTextView *text, struct move *move, int replace_label) {
     gtk_text_buffer_get_end_iter(buf, &end);
     gchar *desc = gtk_text_buffer_get_text(buf, &start, &end, TRUE);
 
+    GtkGrid *grid = GTK_GRID(gtk_widget_get_ancestor(GTK_WIDGET(text), GTK_TYPE_GRID));
     gtk_widget_destroy(GTK_WIDGET(text));
 
     if (replace_label) {
-        GtkGrid *grid = GTK_GRID(gtk_widget_get_ancestor(GTK_WIDGET(text), GTK_TYPE_GRID));
         GtkLabel *lbl = GTK_LABEL(gtk_label_new(desc));
         ADD_CLASS(lbl, "desc");
         gtk_label_set_line_wrap(lbl, TRUE);
