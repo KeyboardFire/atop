@@ -33,16 +33,19 @@
 #define KING   6
 #define NP     KING
 
+// converting coordinates between one and two dimensional representations
 #define SQ(x,y) ((x)*8+(y))
 #define X(sq) ((sq)/8)
 #define Y(sq) ((sq)%8)
 
+// add and remove CSS classes on widgets
 #define ADD_CLASS(x,k) gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(x)), (k))
 #define DEL_CLASS(x,k) gtk_style_context_remove_class(gtk_widget_get_style_context(GTK_WIDGET(x)), (k))
 
 static GtkDrawingArea *board;
 static GtkGrid *moves;
 
+// global state signifying which move description is currently being edited
 static GtkTextView *edit_text;
 static struct move *edit_move;
 static int edit_replace;
@@ -55,6 +58,7 @@ static int pieces[8][8];
 static int legal[8][8];
 static int clicked;
 
+// board history, used for going back with right click
 static int **hist;
 int nhist;
 
@@ -62,6 +66,10 @@ static cairo_surface_t *img_piece[NP*2+1];
 static cairo_surface_t *img_dark;
 static cairo_surface_t *img_light;
 
+// each move has exactly one child, which is a linked list representing all the
+// stored moves from that position
+// all of the elements of this linked list have their parent set to the same
+// node to facilitate navigation
 struct move {
     int from;
     int to;
@@ -72,11 +80,6 @@ struct move {
 };
 struct move *db;
 struct move *cur_node;
-
-#define BUF_SIZE 1024
-#define PENDING_FROM 0
-#define PENDING_TO   1
-#define READING_DESC 2
 static struct move* new_node() {
     struct move *node = malloc(sizeof *node);
     node->desc = NULL;
@@ -86,21 +89,30 @@ static struct move* new_node() {
     return node;
 }
 
+// the following function reads the database file and initializes the db pointer
+#define BUF_SIZE 1024
+#define PENDING_FROM 0
+#define PENDING_TO   1
+#define READING_DESC 2
 static void initialize_db() {
+    // initialize root node (from and to values are irrelevant)
     db = new_node();
     struct move *cur = db;
     cur_node = db;
-    int child = 1;
 
     FILE *f = fopen("atop.db", "rb");
     if (!f) return;
     unsigned char buf[BUF_SIZE];
     size_t nread = 0;
 
-    size_t idx = 0, state = PENDING_FROM;
+    size_t idx = 0,               // current index into buf that is being read
+           state = PENDING_FROM,  // what are we reading?
+           child = 1;             // state variable telling whether to add a
+                                  // new node as a child or a sibling
     while (idx != nread || (idx = 0, (nread = fread(buf, 1, BUF_SIZE, f)) > 0)) {
         switch (state) {
             case PENDING_FROM:
+                // waiting for a new node - if we see FF, we go up one level
                 if (buf[idx] == 0xff) {
                     if (child) child = 0;
                     else if (cur->parent) cur = cur->parent;
@@ -142,6 +154,7 @@ done:
     fclose(f);
 }
 
+// recursive function to simplify save_db
 static void write_node(FILE *f, struct move *node) {
     if (!node) return;
 
@@ -154,6 +167,7 @@ static void write_node(FILE *f, struct move *node) {
     write_node(f, node->next);
 }
 
+// saves db to the database file
 static void save_db() {
     FILE *f = fopen("atop.db", "wb");
     write_node(f, db->child);
@@ -161,6 +175,7 @@ static void save_db() {
     fclose(f);
 }
 
+// this function finalizes the move description currently being edited
 static void save_edit() {
     if (!edit_text) return;
 
@@ -198,6 +213,7 @@ static void save_edit() {
 
 static gboolean save_edit_key(GtkWidget *widget, GdkEventKey *event, gpointer data) {
     (void)widget; (void)data;
+    // called when user presses enter while editing a description
     if (event->keyval == GDK_KEY_Return) {
         save_edit();
         return TRUE;
@@ -221,6 +237,7 @@ static void request_edit(struct move *move, GtkGrid *parent, int y) {
     g_signal_connect(edit_text, "key_press_event", G_CALLBACK(save_edit_key), NULL);
 }
 
+// called when the user clicks the edit pencil icon in the corner
 static gboolean edit(GtkWidget *widget, GdkEventButton *event, gpointer data) {
     (void)event;
 
@@ -235,6 +252,8 @@ static gboolean edit(GtkWidget *widget, GdkEventButton *event, gpointer data) {
 
     return TRUE;
 }
+
+// the following three functions pertain to the move list in the sidebar
 
 static void perform_move(int fx, int fy, int tx, int ty);
 static gboolean move_clicked(GtkWidget *widget, GdkEventButton *event, gpointer data) {
@@ -264,6 +283,7 @@ static gboolean move_left(GtkWidget *widget, GdkEventCrossing *event, gpointer d
     return TRUE;
 }
 
+// convert from and to coords into algebraic notation
 static char* algebraic(int fx, int fy, int tx, int ty) {
     char *buf = malloc(10);
     int idx = 0;
@@ -276,6 +296,7 @@ static char* algebraic(int fx, int fy, int tx, int ty) {
     return buf;
 }
 
+// this function refreshes the movelist in the sidebar
 static void update_moves() {
     gtk_container_foreach(GTK_CONTAINER(moves), (GtkCallback)gtk_widget_destroy, NULL);
 
@@ -333,6 +354,8 @@ static void initialize_images() {
     img_light = cairo_image_surface_create_from_png("img/white.png");
 }
 
+// updates the legal array, which gives the positions to which the currently
+// held piece can move
 static void update_legal(int type, int color, int fx, int fy) {
     if (type == PAWN) {
         if (!pieces[fx][fy-color]) {
@@ -409,15 +432,18 @@ static void update_legal(int type, int color, int fx, int fy) {
     }
 }
 
+// adjudicates the result of moving a piece from (fx,fy) to (tx,ty)
 static void perform_move(int fx, int fy, int tx, int ty) {
     // save any edit of a description currently in progress because the move
     // being edited is about to get removed from the sidebar
     save_edit();
 
+    // push current board to the history stack so we can undo it later
     hist = realloc(hist, ++nhist * sizeof *hist);
     hist[nhist-1] = malloc(sizeof pieces);
     memcpy(hist[nhist-1], pieces, sizeof pieces);
 
+    // handle explosions
     if (pieces[tx][ty]) {
         pieces[tx][ty] = 0;
         if (tx-1 >= 0 && ty-1 >= 0 && abs(pieces[tx-1][ty-1]) != 1) pieces[tx-1][ty-1] = 0;
@@ -431,6 +457,7 @@ static void perform_move(int fx, int fy, int tx, int ty) {
     } else pieces[tx][ty] = pieces[fx][fy];
     pieces[fx][fy] = 0;
 
+    // check to see if this move is in the db
     struct move *prev = NULL;
     for (struct move *m = cur_node->child; m; prev = m, m = m->next) {
         if (m->from == SQ(fx, fy) && m->to == SQ(tx, ty)) {
@@ -440,6 +467,7 @@ static void perform_move(int fx, int fy, int tx, int ty) {
         }
     }
 
+    // if not, add it
     struct move *new_move = new_node();
     new_move->parent = cur_node;
     new_move->from = SQ(fx, fy);
@@ -451,10 +479,12 @@ static void perform_move(int fx, int fy, int tx, int ty) {
     cur_node = new_move;
     save_db();
 
+    // solicit a description in the sidebar
     update_moves();
     request_edit(new_move, moves, 0);
 }
 
+// this implements the global shortcut of right click to go back one ply
 static gboolean mouse_pressed(GtkWidget *widget, GdkEventButton *event, gpointer data) {
     (void)widget; (void)data;
 
@@ -478,6 +508,8 @@ static gboolean mouse_pressed(GtkWidget *widget, GdkEventButton *event, gpointer
 
     return FALSE;
 }
+
+// the following three functions pertain to the board / drawing area
 
 static gboolean board_pressed(GtkWidget *widget, GdkEventButton *event, gpointer data) {
     (void)widget; (void)data;
