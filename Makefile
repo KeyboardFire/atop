@@ -2,17 +2,18 @@ NAME = atop
 TARGET = bin/$(NAME)
 MANPAGE = $(NAME).1
 PREFIX ?= /usr/local
+CC ?= gcc
 .PHONY: all debug release install clean
 
 all: $(TARGET)
 
 bin/%.o: src/%.c $(wildcard src/*.h)
 	@mkdir -p bin
-	gcc $(FLAGS) -Wall -Wextra -Wpedantic `pkg-config --cflags gtk+-3.0` -c $< -o $@
+	$(CC) $(FLAGS) -std=c99 -Wall -Wextra -Wpedantic -c $< -o $@ `pkg-config --cflags gtk+-3.0`
 
 $(TARGET): $(patsubst src/%.c, bin/%.o, $(wildcard src/*.c))
 	@mkdir -p bin
-	gcc $(FLAGS) -Wall -Wextra -Wpedantic `pkg-config --libs gtk+-3.0` -lm $^ -o $@
+	$(CC) $(FLAGS) -std=c99 -Wall -Wextra -Wpedantic $^ -o $@ `pkg-config --libs gtk+-3.0` -lm
 
 debug: FLAGS = -g -O0
 
