@@ -516,7 +516,7 @@ static gboolean mouse_pressed(GtkWidget *widget, GdkEventButton *event, gpointer
     return FALSE;
 }
 
-// the following three functions pertain to the board / drawing area
+// the following four functions pertain to the board / drawing area
 
 static gboolean board_pressed(GtkWidget *widget, GdkEventButton *event, gpointer data) {
     (void)widget; (void)data;
@@ -548,7 +548,6 @@ static gboolean board_moved(GtkWidget *widget, GdkEventMotion *event, gpointer d
     offset_y = event->y;
 
     redraw();
-
     return TRUE;
 }
 
@@ -561,15 +560,17 @@ static gboolean board_released(GtkWidget *widget, GdkEventButton *event, gpointe
         }
 
         clicked = 0;
-        for (int i = 0; i < 8; ++i) {
-            for (int j = 0; j < 8; ++j) {
-                legal[i][j] = 0;
-            }
-        }
+        for (int i = 0; i < 8; ++i) for (int j = 0; j < 8; ++j) legal[i][j] = 0;
     }
 
     redraw();
+    return TRUE;
+}
 
+static gboolean board_left(GtkWidget *widget, GdkEventCrossing *event, gpointer data) {
+    (void)widget; (void)event; (void)data;
+    hover_x = -1;
+    redraw();
     return TRUE;
 }
 
@@ -680,11 +681,13 @@ void atop_init(int *argc, char ***argv) {
     gtk_widget_add_events(GTK_WIDGET(board),
             GDK_BUTTON_PRESS_MASK |
             GDK_POINTER_MOTION_MASK |
-            GDK_BUTTON_RELEASE_MASK);
+            GDK_BUTTON_RELEASE_MASK |
+            GDK_LEAVE_NOTIFY_MASK);
     g_signal_connect(board, "draw", G_CALLBACK(draw_board), NULL);
     g_signal_connect(board, "button_press_event", G_CALLBACK(board_pressed), NULL);
     g_signal_connect(board, "motion_notify_event", G_CALLBACK(board_moved), NULL);
     g_signal_connect(board, "button_release_event", G_CALLBACK(board_released), NULL);
+    g_signal_connect(board, "leave_notify_event", G_CALLBACK(board_left), NULL);
 
     initialize_db();
     initialize_images();
