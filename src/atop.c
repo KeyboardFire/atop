@@ -381,10 +381,12 @@ static void simulate_move(int board[8][8], int fx, int fy, int tx, int ty) {
 
 static void update_legal(int arr[8][8], int board[8][8], int type, int color, int fx, int fy, int check);
 static int in_check(int board[8][8], int color, int fx, int fy, int tx, int ty) {
+    // copy the board and do the move
     int new_board[8][8], new_legal[8][8];
     memcpy(new_board, board, sizeof new_board);
     simulate_move(new_board, fx, fy, tx, ty);
 
+    // locate the king
     int kx, ky;
     for (int i = 0; i < 8; ++i) {
         for (int j = 0; j < 8; ++j) {
@@ -398,6 +400,17 @@ static int in_check(int board[8][8], int color, int fx, int fy, int tx, int ty) 
     return 1; // king was exploded - no self-checkmate allowed
     endfor:{}
 
+    // connected kings are never in check
+    if (kx >= 0 && ky >= 0 && board[kx-1][ky-1] == -color*KING) return 0;
+    if (kx >= 0            && board[kx-1][ky]   == -color*KING) return 0;
+    if (kx >= 0 && ky <  8 && board[kx-1][ky+1] == -color*KING) return 0;
+    if (           ky >= 0 && board[kx][ky-1]   == -color*KING) return 0;
+    if (           ky <  8 && board[kx][ky+1]   == -color*KING) return 0;
+    if (kx <  8 && ky >= 0 && board[kx+1][ky-1] == -color*KING) return 0;
+    if (kx <  8            && board[kx+1][ky]   == -color*KING) return 0;
+    if (kx <  8 && ky <  8 && board[kx+1][ky+1] == -color*KING) return 0;
+
+    // check for direct threats
     for (int i = 0; i < 8; ++i) {
         for (int j = 0; j < 8; ++j) {
             if (signum(new_board[i][j]) == -color) {
