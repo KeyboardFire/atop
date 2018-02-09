@@ -27,6 +27,8 @@
 
 #define M_PI 3.14159265358979323846
 
+#define signum(x) (((x) > 0) - ((x) < 0))
+
 #define PAWN   1
 #define KNIGHT 2
 #define BISHOP 3
@@ -44,7 +46,7 @@
 #define ADD_CLASS(x,k) gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(x)), (k))
 #define DEL_CLASS(x,k) gtk_style_context_remove_class(gtk_widget_get_style_context(GTK_WIDGET(x)), (k))
 
-static GtkDrawingArea *board;
+static GtkDrawingArea *draw;
 static GtkGrid *moves;
 
 // global state signifying which move description is currently being edited
@@ -256,7 +258,7 @@ static gboolean edit(GtkWidget *widget, GdkEventButton *event, gpointer data) {
 }
 
 void redraw() {
-    gtk_widget_queue_draw_area(GTK_WIDGET(board), 0, 0, 512, 512);
+    gtk_widget_queue_draw_area(GTK_WIDGET(draw), 0, 0, 512, 512);
 }
 
 // the following three functions pertain to the move list in the sidebar
@@ -362,80 +364,129 @@ static void initialize_images() {
     img_light = cairo_image_surface_create_from_png("img/white.png");
 }
 
-// updates the legal array, which gives the positions to which the currently
-// held piece can move
-static void update_legal(int type, int color, int fx, int fy) {
-    if (type == PAWN) {
-        if (!pieces[fx][fy-color]) {
-            legal[fx][fy-color] = 1;
-            if ((color == 1 ? fy == 6 : fy == 1) && !pieces[fx][fy-2*color]) {
-                legal[fx][fy-2*color] = 1;
+static void simulate_move(int board[8][8], int fx, int fy, int tx, int ty) {
+    if (board[tx][ty]) {
+        board[tx][ty] = 0;
+        if (tx-1 >= 0 && ty-1 >= 0 && abs(board[tx-1][ty-1]) != 1) board[tx-1][ty-1] = 0;
+        if (tx-1 >= 0              && abs(board[tx-1][ty])   != 1) board[tx-1][ty]   = 0;
+        if (tx-1 >= 0 && ty+1 <  8 && abs(board[tx-1][ty+1]) != 1) board[tx-1][ty+1] = 0;
+        if (             ty-1 >= 0 && abs(board[tx][ty-1])   != 1) board[tx][ty-1]   = 0;
+        if (             ty+1 <  8 && abs(board[tx][ty+1])   != 1) board[tx][ty+1]   = 0;
+        if (tx+1 <  8 && ty-1 >= 0 && abs(board[tx+1][ty-1]) != 1) board[tx+1][ty-1] = 0;
+        if (tx+1 <  8              && abs(board[tx+1][ty])   != 1) board[tx+1][ty]   = 0;
+        if (tx+1 <  8 && ty+1 <  8 && abs(board[tx+1][ty+1]) != 1) board[tx+1][ty+1] = 0;
+    } else board[tx][ty] = board[fx][fy];
+    board[fx][fy] = 0;
+}
+
+static void update_legal(int arr[8][8], int board[8][8], int type, int color, int fx, int fy, int check);
+static int in_check(int board[8][8], int color, int fx, int fy, int tx, int ty) {
+    int new_board[8][8], new_legal[8][8];
+    memcpy(new_board, board, sizeof new_board);
+    simulate_move(new_board, fx, fy, tx, ty);
+
+    int kx, ky;
+    for (int i = 0; i < 8; ++i) {
+        for (int j = 0; j < 8; ++j) {
+            if (new_board[i][j] == color*KING) {
+                kx = i;
+                ky = j;
+                goto endfor;
             }
         }
-        if (fx > 0 && color*pieces[fx-1][fy-color] < 0) legal[fx-1][fy-color] = 1;
-        if (fx < 7 && color*pieces[fx+1][fy-color] < 0) legal[fx+1][fy-color] = 1;
+    }
+    return 1; // king was exploded - no self-checkmate allowed
+    endfor:{}
+
+    for (int i = 0; i < 8; ++i) {
+        for (int j = 0; j < 8; ++j) {
+            if (signum(new_board[i][j]) == -color) {
+                new_legal[kx][ky] = 0;
+                update_legal(new_legal, new_board, abs(new_board[i][j]),
+                        -color, i, j, 0);
+                if (new_legal[kx][ky])return 1;
+            }
+        }
+    }
+
+    return 0;
+}
+
+// updates the legal array, which gives the positions to which the currently
+// held piece can move
+#define TRY(tx,ty) do { if (!(check && in_check(board, color, fx, fy, tx, ty))) arr[tx][ty] = 1; } while (0)
+static void update_legal(int arr[8][8], int board[8][8], int type, int color, int fx, int fy, int check) {
+    if (type == PAWN) {
+        if (!board[fx][fy-color]) {
+            TRY(fx, fy-color);
+            if ((color == 1 ? fy == 6 : fy == 1) && !board[fx][fy-2*color]) {
+                TRY(fx, fy-2*color);
+            }
+        }
+        if (fx > 0 && color*board[fx-1][fy-color] < 0) TRY(fx-1, fy-color);
+        if (fx < 7 && color*board[fx+1][fy-color] < 0) TRY(fx+1, fy-color);
         return;
     }
 
     if (type == KNIGHT) {
-        if (fx+1 <  8 && fy+2 <  8 && color*pieces[fx+1][fy+2] <= 0) legal[fx+1][fy+2] = 1;
-        if (fx+1 <  8 && fy-2 >= 0 && color*pieces[fx+1][fy-2] <= 0) legal[fx+1][fy-2] = 1;
-        if (fx+2 <  8 && fy+1 <  8 && color*pieces[fx+2][fy+1] <= 0) legal[fx+2][fy+1] = 1;
-        if (fx+2 <  8 && fy-1 >= 0 && color*pieces[fx+2][fy-1] <= 0) legal[fx+2][fy-1] = 1;
-        if (fx-1 >= 0 && fy+2 <  8 && color*pieces[fx-1][fy+2] <= 0) legal[fx-1][fy+2] = 1;
-        if (fx-1 >= 0 && fy-2 >= 0 && color*pieces[fx-1][fy-2] <= 0) legal[fx-1][fy-2] = 1;
-        if (fx-2 >= 0 && fy+1 <  8 && color*pieces[fx-2][fy+1] <= 0) legal[fx-2][fy+1] = 1;
-        if (fx-2 >= 0 && fy-1 >= 0 && color*pieces[fx-2][fy-1] <= 0) legal[fx-2][fy-1] = 1;
+        if (fx+1 <  8 && fy+2 <  8 && color*board[fx+1][fy+2] <= 0) TRY(fx+1, fy+2);
+        if (fx+1 <  8 && fy-2 >= 0 && color*board[fx+1][fy-2] <= 0) TRY(fx+1, fy-2);
+        if (fx+2 <  8 && fy+1 <  8 && color*board[fx+2][fy+1] <= 0) TRY(fx+2, fy+1);
+        if (fx+2 <  8 && fy-1 >= 0 && color*board[fx+2][fy-1] <= 0) TRY(fx+2, fy-1);
+        if (fx-1 >= 0 && fy+2 <  8 && color*board[fx-1][fy+2] <= 0) TRY(fx-1, fy+2);
+        if (fx-1 >= 0 && fy-2 >= 0 && color*board[fx-1][fy-2] <= 0) TRY(fx-1, fy-2);
+        if (fx-2 >= 0 && fy+1 <  8 && color*board[fx-2][fy+1] <= 0) TRY(fx-2, fy+1);
+        if (fx-2 >= 0 && fy-1 >= 0 && color*board[fx-2][fy-1] <= 0) TRY(fx-2, fy-1);
         return;
     }
 
     if (type == KING) {
-        if (fx-1 >= 0 && fy-1 >= 0 && !pieces[fx-1][fy-1]) legal[fx-1][fy-1] = 1;
-        if (fx-1 >= 0              && !pieces[fx-1][fy])   legal[fx-1][fy]   = 1;
-        if (fx-1 >= 0 && fy+1 <  8 && !pieces[fx-1][fy+1]) legal[fx-1][fy+1] = 1;
-        if (             fy-1 >= 0 && !pieces[fx][fy-1])   legal[fx][fy-1]   = 1;
-        if (             fy+1 <  8 && !pieces[fx][fy+1])   legal[fx][fy+1]   = 1;
-        if (fx+1 <  8 && fy-1 >= 0 && !pieces[fx+1][fy-1]) legal[fx+1][fy-1] = 1;
-        if (fx+1 <  8              && !pieces[fx+1][fy])   legal[fx+1][fy]   = 1;
-        if (fx+1 <  8 && fy+1 <  8 && !pieces[fx+1][fy+1]) legal[fx+1][fy+1] = 1;
+        if (fx-1 >= 0 && fy-1 >= 0 && !board[fx-1][fy-1]) TRY(fx-1, fy-1);
+        if (fx-1 >= 0              && !board[fx-1][fy])   TRY(fx-1, fy);
+        if (fx-1 >= 0 && fy+1 <  8 && !board[fx-1][fy+1]) TRY(fx-1, fy+1);
+        if (             fy-1 >= 0 && !board[fx][fy-1])   TRY(fx,   fy-1);
+        if (             fy+1 <  8 && !board[fx][fy+1])   TRY(fx,   fy+1);
+        if (fx+1 <  8 && fy-1 >= 0 && !board[fx+1][fy-1]) TRY(fx+1, fy-1);
+        if (fx+1 <  8              && !board[fx+1][fy])   TRY(fx+1, fy);
+        if (fx+1 <  8 && fy+1 <  8 && !board[fx+1][fy+1]) TRY(fx+1, fy+1);
         return;
     }
 
     if (type == ROOK || type == QUEEN) {
         for (int i = 1; fx+i < 8; ++i) {
-            legal[fx+i][fy] = color*pieces[fx+i][fy] <= 0;
-            if (pieces[fx+i][fy]) break;
+            if (color*board[fx+i][fy] <= 0) TRY(fx+i, fy);
+            if (board[fx+i][fy]) break;
         }
         for (int i = 1; fx-i >= 0; ++i) {
-            legal[fx-i][fy] = color*pieces[fx-i][fy] <= 0;
-            if (pieces[fx-i][fy]) break;
+            if (color*board[fx-i][fy] <= 0) TRY(fx-i, fy);
+            if (board[fx-i][fy]) break;
         }
         for (int i = 1; fy+i < 8; ++i) {
-            legal[fx][fy+i] = color*pieces[fx][fy+i] <= 0;
-            if (pieces[fx][fy+i]) break;
+            if (color*board[fx][fy+i] <= 0) TRY(fx, fy+i);
+            if (board[fx][fy+i]) break;
         }
         for (int i = 1; fy-i >= 0; ++i) {
-            legal[fx][fy-i] = color*pieces[fx][fy-i] <= 0;
-            if (pieces[fx][fy-i]) break;
+            if (color*board[fx][fy-i] <= 0) TRY(fx, fy-i);
+            if (board[fx][fy-i]) break;
         }
     }
 
     if (type == BISHOP || type == QUEEN) {
         for (int i = 1; fx+i < 8 && fy+i < 8; ++i) {
-            legal[fx+i][fy+i] = color*pieces[fx+i][fy+i] <= 0;
-            if (pieces[fx+i][fy+i]) break;
+            if (color*board[fx+i][fy+i] <= 0) TRY(fx+i, fy+i);
+            if (board[fx+i][fy+i]) break;
         }
         for (int i = 1; fx+i < 8 && fy-i >= 0; ++i) {
-            legal[fx+i][fy-i] = color*pieces[fx+i][fy-i] <= 0;
-            if (pieces[fx+i][fy-i]) break;
+            if (color*board[fx+i][fy-i] <= 0) TRY(fx+i, fy-i);
+            if (board[fx+i][fy-i]) break;
         }
         for (int i = 1; fx-i >= 0 && fy+i < 8; ++i) {
-            legal[fx-i][fy+i] = color*pieces[fx-i][fy+i] <= 0;
-            if (pieces[fx-i][fy+i]) break;
+            if (color*board[fx-i][fy+i] <= 0) TRY(fx-i, fy+i);
+            if (board[fx-i][fy+i]) break;
         }
         for (int i = 1; fx-i >= 0 && fy-i >= 0; ++i) {
-            legal[fx-i][fy-i] = color*pieces[fx-i][fy-i] <= 0;
-            if (pieces[fx-i][fy-i]) break;
+            if (color*board[fx-i][fy-i] <= 0) TRY(fx-i, fy-i);
+            if (board[fx-i][fy-i]) break;
         }
     }
 }
@@ -452,18 +503,7 @@ static void perform_move(int fx, int fy, int tx, int ty) {
     memcpy(hist[nhist-1], pieces, sizeof pieces);
 
     // handle explosions
-    if (pieces[tx][ty]) {
-        pieces[tx][ty] = 0;
-        if (tx-1 >= 0 && ty-1 >= 0 && abs(pieces[tx-1][ty-1]) != 1) pieces[tx-1][ty-1] = 0;
-        if (tx-1 >= 0              && abs(pieces[tx-1][ty])   != 1) pieces[tx-1][ty]   = 0;
-        if (tx-1 >= 0 && ty+1 <  8 && abs(pieces[tx-1][ty+1]) != 1) pieces[tx-1][ty+1] = 0;
-        if (             ty-1 >= 0 && abs(pieces[tx][ty-1])   != 1) pieces[tx][ty-1]   = 0;
-        if (             ty+1 <  8 && abs(pieces[tx][ty+1])   != 1) pieces[tx][ty+1]   = 0;
-        if (tx+1 <  8 && ty-1 >= 0 && abs(pieces[tx+1][ty-1]) != 1) pieces[tx+1][ty-1] = 0;
-        if (tx+1 <  8              && abs(pieces[tx+1][ty])   != 1) pieces[tx+1][ty]   = 0;
-        if (tx+1 <  8 && ty+1 <  8 && abs(pieces[tx+1][ty+1]) != 1) pieces[tx+1][ty+1] = 0;
-    } else pieces[tx][ty] = pieces[fx][fy];
-    pieces[fx][fy] = 0;
+    simulate_move(pieces, fx, fy, tx, ty);
 
     // check to see if this move is in the db
     struct move *prev = NULL;
@@ -528,7 +568,7 @@ static gboolean board_pressed(GtkWidget *widget, GdkEventButton *event, gpointer
         click_y = event->y / 64;
         if (click_x < 8 && click_y < 8 && pieces[click_x][click_y] * (nhist%2*2-1) < 0) {
             clicked = pieces[click_x][click_y];
-            update_legal(abs(clicked), (clicked > 0) - (clicked < 0), click_x, click_y);
+            update_legal(legal, pieces, abs(clicked), signum(clicked), click_x, click_y, 1);
             redraw();
         }
         return TRUE;
@@ -678,18 +718,18 @@ void atop_init(int *argc, char ***argv) {
     g_signal_connect(win, "destroy", G_CALLBACK(gtk_main_quit), NULL);
     g_signal_connect(win, "button_press_event", G_CALLBACK(mouse_pressed), NULL);
 
-    board = GTK_DRAWING_AREA(gtk_builder_get_object(builder, "board"));
-    gtk_widget_set_size_request(GTK_WIDGET(board), 512, 512);
-    gtk_widget_add_events(GTK_WIDGET(board),
+    draw = GTK_DRAWING_AREA(gtk_builder_get_object(builder, "board"));
+    gtk_widget_set_size_request(GTK_WIDGET(draw), 512, 512);
+    gtk_widget_add_events(GTK_WIDGET(draw),
             GDK_BUTTON_PRESS_MASK |
             GDK_POINTER_MOTION_MASK |
             GDK_BUTTON_RELEASE_MASK |
             GDK_LEAVE_NOTIFY_MASK);
-    g_signal_connect(board, "draw", G_CALLBACK(draw_board), NULL);
-    g_signal_connect(board, "button_press_event", G_CALLBACK(board_pressed), NULL);
-    g_signal_connect(board, "motion_notify_event", G_CALLBACK(board_moved), NULL);
-    g_signal_connect(board, "button_release_event", G_CALLBACK(board_released), NULL);
-    g_signal_connect(board, "leave_notify_event", G_CALLBACK(board_left), NULL);
+    g_signal_connect(draw, "draw", G_CALLBACK(draw_board), NULL);
+    g_signal_connect(draw, "button_press_event", G_CALLBACK(board_pressed), NULL);
+    g_signal_connect(draw, "motion_notify_event", G_CALLBACK(board_moved), NULL);
+    g_signal_connect(draw, "button_release_event", G_CALLBACK(board_released), NULL);
+    g_signal_connect(draw, "leave_notify_event", G_CALLBACK(board_left), NULL);
 
     initialize_db();
     initialize_images();
