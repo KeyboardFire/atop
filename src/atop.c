@@ -61,6 +61,7 @@ static struct move *hover_move;
 static int pieces[8][8];
 static int legal[8][8];
 static int clicked;
+static int current_check;
 
 // board history, used for going back with right click
 static int **hist;
@@ -384,7 +385,7 @@ static int in_check(int board[8][8], int color, int fx, int fy, int tx, int ty) 
     // copy the board and do the move
     int new_board[8][8], new_legal[8][8];
     memcpy(new_board, board, sizeof new_board);
-    simulate_move(new_board, fx, fy, tx, ty);
+    if (fx != -1) simulate_move(new_board, fx, fy, tx, ty);
 
     // locate the king
     int kx, ky;
@@ -401,14 +402,14 @@ static int in_check(int board[8][8], int color, int fx, int fy, int tx, int ty) 
     endfor:{}
 
     // connected kings are never in check
-    if (kx >= 0 && ky >= 0 && board[kx-1][ky-1] == -color*KING) return 0;
-    if (kx >= 0            && board[kx-1][ky]   == -color*KING) return 0;
-    if (kx >= 0 && ky <  8 && board[kx-1][ky+1] == -color*KING) return 0;
-    if (           ky >= 0 && board[kx][ky-1]   == -color*KING) return 0;
-    if (           ky <  8 && board[kx][ky+1]   == -color*KING) return 0;
-    if (kx <  8 && ky >= 0 && board[kx+1][ky-1] == -color*KING) return 0;
-    if (kx <  8            && board[kx+1][ky]   == -color*KING) return 0;
-    if (kx <  8 && ky <  8 && board[kx+1][ky+1] == -color*KING) return 0;
+    if (kx-1 >= 0 && ky-1 >= 0 && new_board[kx-1][ky-1] == -color*KING) return 0;
+    if (kx-1 >= 0              && new_board[kx-1][ky]   == -color*KING) return 0;
+    if (kx-1 >= 0 && ky+1 <  8 && new_board[kx-1][ky+1] == -color*KING) return 0;
+    if (             ky-1 >= 0 && new_board[kx][ky-1]   == -color*KING) return 0;
+    if (             ky+1 <  8 && new_board[kx][ky+1]   == -color*KING) return 0;
+    if (kx+1 <  8 && ky-1 >= 0 && new_board[kx+1][ky-1] == -color*KING) return 0;
+    if (kx+1 <  8              && new_board[kx+1][ky]   == -color*KING) return 0;
+    if (kx+1 <  8 && ky+1 <  8 && new_board[kx+1][ky+1] == -color*KING) return 0;
 
     // check for direct threats
     for (int i = 0; i < 8; ++i) {
@@ -517,6 +518,7 @@ static void perform_move(int fx, int fy, int tx, int ty) {
 
     // handle explosions
     simulate_move(pieces, fx, fy, tx, ty);
+    current_check = in_check(pieces, 1-nhist%2*2, -1, -1, -1, -1);
 
     // check to see if this move is in the db
     struct move *prev = NULL;
@@ -647,6 +649,18 @@ static gboolean draw_board(GtkWidget *widget, cairo_t *cr, gpointer data) {
 
             // draw piece, if any
             if (pieces[i][j] && !(clicked && click_x == i && click_y == j)) {
+                // draw king in check if relevant
+                if (current_check && pieces[i][j] == (1-nhist%2*2)*KING) {
+                    cairo_pattern_t *pat = cairo_pattern_create_radial(
+                            i*64+32, j*64+32, 0, i*64+32, j*64+32, 32);
+                    cairo_pattern_add_color_stop_rgba(pat, 0, 1, 0, 0, 1);
+                    cairo_pattern_add_color_stop_rgba(pat, 1, 1, 0, 0, 0);
+                    cairo_set_source(cr, pat);
+                    cairo_arc(cr, i*64+32, j*64+32, 30, 0, 2*M_PI);
+                    cairo_fill(cr);
+                    cairo_pattern_destroy(pat);
+                }
+
                 cairo_set_source_surface(cr, img_piece[NP+pieces[i][j]], i*64, j*64);
                 cairo_paint(cr);
             }
@@ -710,6 +724,8 @@ static void initialize_pieces() {
 
     pieces[4][0] = -KING;
     pieces[4][7] = +KING;
+
+    current_check = 0;
 }
 
 void atop_init(int *argc, char ***argv) {
