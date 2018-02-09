@@ -293,6 +293,7 @@ static gboolean move_left(GtkWidget *widget, GdkEventCrossing *event, gpointer d
 }
 
 // convert from and to coords into algebraic notation
+static int in_check(int board[8][8], int color, int fx, int fy, int tx, int ty);
 static char* algebraic(int fx, int fy, int tx, int ty) {
     char *buf = malloc(10);
     int idx = 0;
@@ -303,6 +304,7 @@ static char* algebraic(int fx, int fy, int tx, int ty) {
     if (pieces[tx][ty]) buf[idx++] = 'x';
     buf[idx++] = 'a' + tx;
     buf[idx++] = '8' - ty;
+    if (in_check(pieces, nhist%2*2-1, fx, fy, tx, ty)) buf[idx++] = '+';
     buf[idx] = '\0';
     return buf;
 }
