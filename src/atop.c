@@ -326,12 +326,17 @@ static char* algebraic(int fx, int fy, int tx, int ty) {
     char *buf = malloc(10);
     int idx = 0;
     int type = abs(pieces[fx][fy]);
-    if (type == 1) {
-        if (pieces[tx][ty]) buf[idx++] = 'a' + fx;
-    } else buf[idx++] = "  NBRQK"[type];
-    if (pieces[tx][ty]) buf[idx++] = 'x';
-    buf[idx++] = 'a' + tx;
-    buf[idx++] = '8' - ty;
+    if (type == KING && abs(tx - fx) == 2) {
+        buf[idx++] = 'O'; buf[idx++] = '-'; buf[idx++] = 'O';
+        if (tx < fx) { buf[idx++] = '-'; buf[idx++] = 'O'; }
+    } else {
+        if (type == PAWN) {
+            if (pieces[tx][ty]) buf[idx++] = 'a' + fx;
+        } else buf[idx++] = "  NBRQK"[type];
+        if (pieces[tx][ty]) buf[idx++] = 'x';
+        buf[idx++] = 'a' + tx;
+        buf[idx++] = '8' - ty;
+    }
     switch (in_check(pieces, nhist%2*2-1, fx, fy, tx, ty, 1)) {
         case 1: buf[idx++] = '+'; break;
         case 2: buf[idx++] = '#'; break;
