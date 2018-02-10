@@ -62,6 +62,7 @@ static int pieces[8][8];
 static int legal[8][8];
 static int clicked;
 static int current_check;
+static int cwk, cwq, cbk, cbq;
 
 // board history, used for going back with right click
 static int **hist;
@@ -417,6 +418,13 @@ static void simulate_move(int board[8][8], int fx, int fy, int tx, int ty) {
         if (tx+1 <  8 && ty+1 <  8 && abs(board[tx+1][ty+1]) != 1) board[tx+1][ty+1] = 0;
     } else board[tx][ty] = board[fx][fy];
     board[fx][fy] = 0;
+
+    // resolve castling if it occurred
+    if (abs(board[tx][ty]) == KING && abs(tx - fx) == 2) {
+        int rx = tx > fx ? 7 : 0;
+        board[tx - signum(tx - fx)][ty] = board[rx][ty];
+        board[rx][ty] = 0;
+    }
 }
 
 static void update_legal(int arr[8][8], int board[8][8], int type, int color, int fx, int fy, int check);
@@ -516,6 +524,15 @@ static void update_legal(int arr[8][8], int board[8][8], int type, int color, in
         if (fx+1 <  8 && fy-1 >= 0 && !board[fx+1][fy-1]) TRY(fx+1, fy-1);
         if (fx+1 <  8              && !board[fx+1][fy])   TRY(fx+1, fy);
         if (fx+1 <  8 && fy+1 <  8 && !board[fx+1][fy+1]) TRY(fx+1, fy+1);
+        if (check && !(color == 1 ? cwk : cbk) &&
+                !in_check(board, color, -1, -1, -1, -1, 0) &&
+                !in_check(board, color, fx, fy, fx+1, fy, 0) &&
+                !in_check(board, color, fx, fy, fx+2, fy, 0)) arr[fx+2][fy] = 1;
+        if (check && !(color == 1 ? cwq : cbq) &&
+                !in_check(board, color, -1, -1, -1, -1, 0) &&
+                !in_check(board, color, fx, fy, fx-1, fy, 0) &&
+                !in_check(board, color, fx, fy, fx-2, fy, 0) &&
+                !board[fx-3][fy]) arr[fx-2][fy] = 1;
         return;
     }
 
@@ -780,6 +797,7 @@ static void initialize_pieces() {
     pieces[4][7] = +KING;
 
     current_check = 0;
+    cwk = cwq = cbk = cbq = 0;
 }
 
 void atop_init(int *argc, char ***argv) {
