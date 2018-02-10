@@ -293,7 +293,7 @@ static gboolean move_left(GtkWidget *widget, GdkEventCrossing *event, gpointer d
 }
 
 // convert from and to coords into algebraic notation
-static int in_check(int board[8][8], int color, int fx, int fy, int tx, int ty);
+static int in_check(int board[8][8], int color, int fx, int fy, int tx, int ty, int mate);
 static char* algebraic(int fx, int fy, int tx, int ty) {
     char *buf = malloc(10);
     int idx = 0;
@@ -304,7 +304,10 @@ static char* algebraic(int fx, int fy, int tx, int ty) {
     if (pieces[tx][ty]) buf[idx++] = 'x';
     buf[idx++] = 'a' + tx;
     buf[idx++] = '8' - ty;
-    if (in_check(pieces, nhist%2*2-1, fx, fy, tx, ty)) buf[idx++] = '+';
+    switch (in_check(pieces, nhist%2*2-1, fx, fy, tx, ty, 1)) {
+        case 1: buf[idx++] = '+'; break;
+        case 2: buf[idx++] = '#'; break;
+    }
     buf[idx] = '\0';
     return buf;
 }
@@ -383,7 +386,7 @@ static void simulate_move(int board[8][8], int fx, int fy, int tx, int ty) {
 }
 
 static void update_legal(int arr[8][8], int board[8][8], int type, int color, int fx, int fy, int check);
-static int in_check(int board[8][8], int color, int fx, int fy, int tx, int ty) {
+static int in_check(int board[8][8], int color, int fx, int fy, int tx, int ty, int mate) {
     // copy the board and do the move
     int new_board[8][8], new_legal[8][8];
     memcpy(new_board, board, sizeof new_board);
@@ -400,7 +403,7 @@ static int in_check(int board[8][8], int color, int fx, int fy, int tx, int ty) 
             }
         }
     }
-    return 1; // king was exploded - no self-checkmate allowed
+    return 2; // king was exploded - checkmate
     endfor:{}
 
     // connected kings are never in check
@@ -416,12 +419,26 @@ static int in_check(int board[8][8], int color, int fx, int fy, int tx, int ty) 
     // check for direct threats
     for (int i = 0; i < 8; ++i) {
         for (int j = 0; j < 8; ++j) {
-            if (signum(new_board[i][j]) == -color) {
-                new_legal[kx][ky] = 0;
-                update_legal(new_legal, new_board, abs(new_board[i][j]),
-                        -color, i, j, 0);
-                if (new_legal[kx][ky])return 1;
+            if (signum(new_board[i][j]) != -color) continue;
+            new_legal[kx][ky] = 0;
+            update_legal(new_legal, new_board, abs(new_board[i][j]), -color, i, j, 0);
+            if (!new_legal[kx][ky]) continue;
+
+            // an enemy piece can legally take the king, so it's in check
+            if (!mate) return 1;
+            for (int ii = 0; ii < 8; ++ii) {
+                for (int jj = 0; jj < 8; ++jj) {
+                    if (color * new_board[ii][jj] <= 0) continue;
+                    memset(new_legal, 0, sizeof new_legal);
+                    update_legal(new_legal, new_board, abs(new_board[ii][jj]), color, ii, jj, 1);
+                    for (int iii = 0; iii < 8; ++iii) {
+                        for (int jjj = 0; jjj < 8; ++jjj) {
+                            if (new_legal[iii][jjj]) return 1;
+                        }
+                    }
+                }
             }
+            return 2;
         }
     }
 
@@ -430,7 +447,7 @@ static int in_check(int board[8][8], int color, int fx, int fy, int tx, int ty) 
 
 // updates the legal array, which gives the positions to which the currently
 // held piece can move
-#define TRY(tx,ty) do { if (!(check && in_check(board, color, fx, fy, tx, ty))) arr[tx][ty] = 1; } while (0)
+#define TRY(tx,ty) do { if (!(check && in_check(board, color, fx, fy, tx, ty, 0))) arr[tx][ty] = 1; } while (0)
 static void update_legal(int arr[8][8], int board[8][8], int type, int color, int fx, int fy, int check) {
     if (type == PAWN) {
         if (!board[fx][fy-color]) {
@@ -520,7 +537,7 @@ static void perform_move(int fx, int fy, int tx, int ty) {
 
     // handle explosions
     simulate_move(pieces, fx, fy, tx, ty);
-    current_check = in_check(pieces, 1-nhist%2*2, -1, -1, -1, -1);
+    current_check = in_check(pieces, 1-nhist%2*2, -1, -1, -1, -1, 0);
 
     // check to see if this move is in the db
     struct move *prev = NULL;
