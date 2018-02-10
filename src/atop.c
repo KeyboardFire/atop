@@ -584,6 +584,7 @@ static gboolean mouse_pressed(GtkWidget *widget, GdkEventButton *event, gpointer
 
         hover_move = NULL;
         update_moves();
+        current_check = in_check(pieces, 1-nhist%2*2, -1, -1, -1, -1, 0);
         redraw();
 
         return TRUE;
