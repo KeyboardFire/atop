@@ -591,8 +591,15 @@ static void perform_move(int fx, int fy, int tx, int ty) {
     hist[nhist-1] = malloc(sizeof pieces);
     memcpy(hist[nhist-1], pieces, sizeof pieces);
 
-    // handle explosions
+    // do the move and update relevant states
     simulate_move(pieces, fx, fy, tx, ty);
+    if (nhist % 2) {
+        if (cwk || (fy == 7 && (fx == 4 || fx == 7))) ++cwk;
+        if (cwq || (fy == 7 && (fx == 4 || fx == 0))) ++cwq;
+    } else {
+        if (cbk || (fy == 0 && (fx == 4 || fx == 7))) ++cbk;
+        if (cbq || (fy == 0 && (fx == 4 || fx == 0))) ++cbq;
+    }
     current_check = in_check(pieces, 1-nhist%2*2, -1, -1, -1, -1, 0);
 
     // check to see if this move is in the db
@@ -640,6 +647,8 @@ static gboolean mouse_pressed(GtkWidget *widget, GdkEventButton *event, gpointer
 
         hover_move = NULL;
         update_moves();
+        if (nhist % 2) { if (cbk) --cbk; if (cbq) --cbq; }
+        else { if (cwk) --cwk; if (cwq) --cwq; }
         current_check = in_check(pieces, 1-nhist%2*2, -1, -1, -1, -1, 0);
         redraw();
 
