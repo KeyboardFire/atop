@@ -258,6 +258,33 @@ static gboolean edit(GtkWidget *widget, GdkEventButton *event, gpointer data) {
     return TRUE;
 }
 
+// called when the user clicks the delete icon in the corner
+static gboolean delete(GtkWidget *widget, GdkEventButton *event, gpointer data) {
+    (void)event;
+    struct move *move = data;
+
+    // remove the move in the sidebar
+    GtkWidget *row = gtk_widget_get_parent(gtk_widget_get_ancestor(widget, GTK_TYPE_GRID));
+    gtk_container_remove(GTK_CONTAINER(gtk_widget_get_parent(row)), row);
+
+    // remove the move in the database
+    struct move *prev = NULL;
+    for (struct move *m = move->parent->child; m; m = m->next) {
+        if (m == move) {
+            if (prev) prev->next = m->next;
+            else m->parent->child = m->next;
+            free(m->desc);
+            free(m);
+            break;
+        }
+        prev = m;
+    }
+
+    save_db();
+
+    return TRUE;
+}
+
 void redraw() {
     gtk_widget_queue_draw_area(GTK_WIDGET(draw), 0, 0, 512, 512);
 }
@@ -332,8 +359,15 @@ static void update_moves() {
         gtk_widget_set_halign(GTK_WIDGET(btn), GTK_ALIGN_END);
         g_signal_connect(btn, "button_press_event", G_CALLBACK(edit), m);
 
+        GtkEventBox *del = GTK_EVENT_BOX(gtk_event_box_new());
+        ADD_CLASS(del, "delbtn");
+        gtk_container_add(GTK_CONTAINER(del), gtk_image_new_from_file("img/delete.png"));
+        gtk_widget_set_halign(GTK_WIDGET(del), GTK_ALIGN_START);
+        g_signal_connect(del, "button_press_event", G_CALLBACK(delete), m);
+
         gtk_container_add(GTK_CONTAINER(overlay), GTK_WIDGET(head));
         gtk_overlay_add_overlay(overlay, GTK_WIDGET(btn));
+        gtk_overlay_add_overlay(overlay, GTK_WIDGET(del));
         gtk_grid_attach(container, GTK_WIDGET(overlay), 0, 0, 1, 1);
 
         GtkLabel *txt = GTK_LABEL(gtk_label_new(m->desc));
