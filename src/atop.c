@@ -722,7 +722,7 @@ static gboolean draw_board(GtkWidget *widget, cairo_t *cr, gpointer data) {
     for (int i = 0; i < 8; ++i) {
         for (int j = 0; j < 8; ++j) {
             // draw square
-            cairo_set_source_surface(cr, (i + j) % 2 ? img_dark : img_light, i*64, j*64);
+            cairo_set_source_surface(cr, (i + j) % 2 ? img_light : img_dark, i*64, j*64);
             cairo_paint(cr);
 
             // shade square if hovering
